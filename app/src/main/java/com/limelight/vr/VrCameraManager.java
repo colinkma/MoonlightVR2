@@ -9,6 +9,7 @@ import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CaptureRequest;
+import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.util.Log;
@@ -44,7 +45,8 @@ public class VrCameraManager {
             return;
         }
 
-        if (context.checkSelfPermission(Manifest.permission.CAMERA)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                && context.checkSelfPermission(Manifest.permission.CAMERA)
                 != PackageManager.PERMISSION_GRANTED) {
             Log.e(TAG, "Camera permission not granted");
             return;
@@ -150,10 +152,9 @@ public class VrCameraManager {
                     },
                     cameraHandler
             );
-        } catch (CameraAccessException e) {
-            Log.e(TAG, "Failed to create capture session", e);
-        } catch (IllegalStateException e) {
-            Log.e(TAG, "Illegal state creating capture session", e);
+        } catch (CameraAccessException | IllegalStateException e) {
+            Log.e(TAG, "Failed to create camera capture session", e);
+            stopCamera();
         }
     }
 
@@ -172,9 +173,8 @@ public class VrCameraManager {
             isOpening = false;
             Log.i(TAG, "Camera preview started");
         } catch (CameraAccessException | IllegalStateException e) {
-            isStarted = false;
-            isOpening = false;
             Log.e(TAG, "Failed to start preview", e);
+            stopCamera();
         }
     }
 
