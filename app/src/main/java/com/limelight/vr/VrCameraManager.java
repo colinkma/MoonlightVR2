@@ -104,18 +104,20 @@ public class VrCameraManager {
         @Override
         public void onDisconnected(CameraDevice camera) {
             camera.close();
-            cameraDevice = null;
-            isStarted = false;
-            isOpening = false;
+            if (cameraDevice == camera) {
+                cameraDevice = null;
+            }
+            stopCamera();
         }
 
         @Override
         public void onError(CameraDevice camera, int error) {
             camera.close();
-            cameraDevice = null;
-            isStarted = false;
-            isOpening = false;
+            if (cameraDevice == camera) {
+                cameraDevice = null;
+            }
             Log.e(TAG, "Camera error: " + error);
+            stopCamera();
         }
     };
 
@@ -144,10 +146,9 @@ public class VrCameraManager {
 
                         @Override
                         public void onConfigureFailed(CameraCaptureSession session) {
-                            isStarted = false;
-                            isOpening = false;
                             Log.e(TAG, "Camera configuration FAILED");
                             session.close();
+                            stopCamera();
                         }
                     },
                     cameraHandler
