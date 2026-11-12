@@ -406,9 +406,15 @@ void VrMoonlightApp::SetDisplayMode(int mode) {
     if (head_tracker_ != nullptr) {
       display_mode_ = 1;
       toolbar_anchor_valid_ = false;
+      // Start as a spatially anchored floating window; the first valid pose
+      // captures the anchor on the GL thread without a one-frame jump.
+      window_locked_ = true;
+      window_lock_pending_ = true;
       CardboardHeadTracker_resume(head_tracker_);
     } else {
       display_mode_ = 0;
+      window_locked_ = false;
+      window_lock_pending_ = false;
       VR_LOGE("Unable to create Cardboard head tracker; falling back to fixed SBS mode");
     }
   } else {
@@ -913,10 +919,12 @@ void VrMoonlightApp::DrawSpatialControls(const Matrix4x4& vp) {
   const float panel[]={0.018f,0.024f,0.038f,0.92f};
   const float normal[]={0.13f,0.16f,0.21f,1.f};
   const float focus[]={0.08f,0.38f,0.72f,1.f};
+  const float locked_color[]={0.08f,0.28f,0.20f,1.f};
   const float white[]={0.9f,0.94f,1.f,1.f};
   rect(0.f,0.f,0.025f,2.02f,0.27f,panel);
   for(int i=0;i<5;++i) {
-    rect(centers[i],0.f,0.035f,0.31f,0.20f,gaze_target_==i?focus:normal);
+    rect(centers[i],0.f,0.035f,0.31f,0.20f,
+         gaze_target_==i?focus:(i==4&&window_locked_?locked_color:normal));
     if(i<2) {
       rect(centers[i],0.f,0.046f,0.105f,0.012f,white);
       if(i==1) rect(centers[i],0.f,0.047f,0.012f,0.105f,white);
@@ -927,7 +935,12 @@ void VrMoonlightApp::DrawSpatialControls(const Matrix4x4& vp) {
       if(i==3) rect(centers[i],0.f,0.047f,0.012f,0.06f,white);
     } else {
       rect(centers[i],0.f,0.046f,0.075f,0.055f,white);
-      rect(centers[i],0.04f,0.046f,0.055f,0.025f,white);
+      if (window_locked_) {
+        rect(centers[i],0.04f,0.046f,0.055f,0.025f,white);
+      } else {
+        rect(centers[i]+0.025f,0.045f,0.046f,0.025f,0.05f,white);
+        rect(centers[i]+0.005f,0.07f,0.046f,0.04f,0.012f,white);
+      }
     }
     if(gaze_target_==i&&gaze_action_armed_) {
       const float progress[]={0.3f,0.9f,1.f,1.f};
