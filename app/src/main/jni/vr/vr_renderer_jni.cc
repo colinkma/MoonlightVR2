@@ -66,6 +66,26 @@ Java_com_limelight_vr_VrRenderer_nativeSetLensDistortionStrength(JNIEnv*, jobjec
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_com_limelight_vr_VrRenderer_nativeSetDisplayMode(JNIEnv*, jobject,
+                                                      jlong handle, jint mode) {
+  FromHandle(handle)->SetDisplayMode(mode);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_limelight_vr_VrRenderer_nativeSetViewportOrientation(JNIEnv*, jobject,
+                                                              jlong handle,
+                                                              jint rotation) {
+  FromHandle(handle)->SetViewportOrientation(rotation);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_limelight_vr_VrRenderer_nativeSetWindowLocked(JNIEnv*, jobject,
+                                                       jlong handle,
+                                                       jboolean locked) {
+  FromHandle(handle)->SetWindowLocked(locked == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_com_limelight_vr_VrRenderer_nativeSetScreenDistance(JNIEnv*, jobject,
                                                         jlong handle,
                                                         jfloat distanceMeters) {
@@ -160,9 +180,9 @@ Java_com_limelight_vr_VrRenderer_nativeGetVerticalCurvature(JNIEnv*, jobject,
   return FromHandle(handle)->GetVerticalCurvature();
 }
 
-extern "C" JNIEXPORT void JNICALL
+extern "C" JNIEXPORT jfloat JNICALL
 Java_com_limelight_vr_VrRenderer_nativeOnDrawFrame(JNIEnv*, jobject, jlong handle) {
-  FromHandle(handle)->OnDrawFrame();
+  return FromHandle(handle)->OnDrawFrame();
 }
 
 extern "C" JNIEXPORT void JNICALL
