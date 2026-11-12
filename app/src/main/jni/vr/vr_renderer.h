@@ -111,6 +111,7 @@ class VrMoonlightApp {
   GLint spatial_ui_color_uniform_ = -1;
   static constexpr float kGazeDwellSeconds = 0.8f;
   int gaze_target_ = -1;
+  int previous_gaze_target_ = -2;
   float gaze_dwell_seconds_ = 0.0f;
   int64_t last_gaze_frame_nano_ = 0;
   bool gaze_action_armed_ = true;
