@@ -35,6 +35,15 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
         void onSurfaceReady(Surface surface);
     }
 
+    public interface HeadPitchListener {
+        void onHeadPitchChanged(boolean lookingDown);
+    }
+
+    private static final float CAMERA_ENTER_PITCH_DEGREES = 35.0f;
+    private static final float CAMERA_EXIT_PITCH_DEGREES = 25.0f;
+    private HeadPitchListener headPitchListener;
+    private boolean lookingDownForCamera = false;
+
     private final GLSurfaceView glSurfaceView;
     private final SurfaceListener surfaceListener;
     private final long nativeHandle;
@@ -180,7 +189,17 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
                 LimeLog.warning("Error updating camera texture: " + e.getMessage());
             }
         }
-        nativeOnDrawFrame(nativeHandle);
+        float headPitchDegrees = nativeOnDrawFrame(nativeHandle);
+        boolean shouldLookDown = lookingDownForCamera
+                ? headPitchDegrees >= CAMERA_EXIT_PITCH_DEGREES
+                : headPitchDegrees >= CAMERA_ENTER_PITCH_DEGREES;
+        if (shouldLookDown != lookingDownForCamera) {
+            lookingDownForCamera = shouldLookDown;
+            HeadPitchListener listener = headPitchListener;
+            if (listener != null) {
+                listener.onHeadPitchChanged(lookingDownForCamera);
+            }
+        }
     }
 
     @Override
@@ -251,8 +270,24 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
         nativeSetLensDistortionStrength(nativeHandle, Math.max(0.0f, Math.min(1.0f, strength)));
     }
 
+    public void setHeadPitchListener(HeadPitchListener listener) {
+        this.headPitchListener = listener;
+    }
+
+    public void setDisplayMode(final int mode) {
+        glSurfaceView.queueEvent(() -> nativeSetDisplayMode(nativeHandle, mode));
+    }
+
+    public void setViewportOrientation(final int rotation) {
+        glSurfaceView.queueEvent(() -> nativeSetViewportOrientation(nativeHandle, rotation));
+    }
+
+    public void setWindowLocked(final boolean locked) {
+        glSurfaceView.queueEvent(() -> nativeSetWindowLocked(nativeHandle, locked));
+    }
+
     public void setScreenDistance(float distanceMeters) {
-        nativeSetScreenDistance(nativeHandle, distanceMeters);
+        glSurfaceView.queueEvent(() -> nativeSetScreenDistance(nativeHandle, distanceMeters));
     }
 
     public void setScreenSize(float sizeMultiplier) {
@@ -260,7 +295,7 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     }
 
     public void adjustScreenDistance(float deltaMeters) {
-        nativeAdjustScreenDistance(nativeHandle, deltaMeters);
+        glSurfaceView.queueEvent(() -> nativeAdjustScreenDistance(nativeHandle, deltaMeters));
     }
 
     public void adjustScreenSize(float deltaMultiplier) {
@@ -272,7 +307,7 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     }
 
     public void adjustScreenRotation(float deltaRadians) {
-        nativeAdjustScreenRotation(nativeHandle, deltaRadians);
+        glSurfaceView.queueEvent(() -> nativeAdjustScreenRotation(nativeHandle, deltaRadians));
     }
 
     public void recenterView() {
@@ -490,9 +525,12 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     private native void nativeSetTextureTransform(long handle, float[] transform);
     private native void nativeSetVideoAspectRatio(long handle, float aspectRatio);
     private native void nativeSetLensDistortionStrength(long handle, float strength);
-    private native void nativeOnDrawFrame(long handle);
+    private native float nativeOnDrawFrame(long handle);
     private native void nativeOnPause(long handle);
     private native void nativeOnResume(long handle);
+    private native void nativeSetDisplayMode(long handle, int mode);
+    private native void nativeSetViewportOrientation(long handle, int rotation);
+    private native void nativeSetWindowLocked(long handle, boolean locked);
     private native void nativeSetScreenDistance(long handle, float distanceMeters);
     private native void nativeSetScreenSize(long handle, float sizeMultiplier);
     private native void nativeAdjustScreenDistance(long handle, float deltaMeters);
