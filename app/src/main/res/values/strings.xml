@@ -230,6 +230,15 @@
     <string name="title_checkbox_enable_pip">Enable Picture-in-Picture observer mode</string>
     <string name="summary_checkbox_enable_pip">Allows the stream to be viewed (but not controlled) while multitasking</string>
     <string name="title_checkbox_enable_vr">Enable VR mode</string>
+    <string name="title_checkbox_enable_vr_spatial_mode">Fixed spatial screen mode</string>
+    <string name="summary_checkbox_enable_vr_spatial_mode">Anchor the stream screen in 3D space. Adjust its distance, lock its position, and rotate it while streaming.</string>
+    <string name="title_checkbox_enable_vr_camera_passthrough">Camera passthrough when looking down</string>
+    <string name="summary_checkbox_enable_vr_camera_passthrough">Use the rear camera as a transparent real-world background while looking down; stop it when you look up.</string>
+    <string name="vr_spatial_distance_near">Closer −</string>
+    <string name="vr_spatial_distance_far">Farther +</string>
+    <string name="vr_spatial_rotate">Rotate 90°</string>
+    <string name="vr_spatial_lock">Lock screen</string>
+    <string name="vr_spatial_unlock">Unlock screen</string>
     <string name="summary_checkbox_enable_vr">Use with the Cardboard VR set</string>
     <string name="title_checkbox_enable_skybox">Enable VR Skybox</string>
     <string name="summary_checkbox_enable_skybox">Render a world-locked skybox background in VR mode</string>
