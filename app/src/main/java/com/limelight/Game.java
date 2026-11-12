@@ -165,7 +165,6 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     private static final int LENS_SIDE_RIGHT = 2;
     private static final int CAMERA_PERMISSION_REQ = 1001;
     private VrCameraManager vrCameraManager;
-    private boolean vrSpatialWindowLocked = false;
     private boolean vrHeadLookingDown = false;
     private boolean vrCameraPermissionRequested = false;
     private boolean vrCameraStartQueued = false;
