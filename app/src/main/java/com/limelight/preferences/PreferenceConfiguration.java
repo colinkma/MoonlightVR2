@@ -82,6 +82,8 @@ public class PreferenceConfiguration {
     public static final String VR_RIGHT_LENS_OFFSET_PREF_STRING = "vr_right_lens_offset_x";
     public static final String VR_LENS_LOCK_PREF_STRING = "checkbox_lock_vr_lenses";
     public static final String VR_ENABLE_CAMERA_PIP_PREF_STRING = "checkbox_enable_vr_camera_pip";
+    public static final String VR_SPATIAL_MODE_PREF_STRING = "checkbox_enable_vr_spatial_mode";
+    public static final String VR_CAMERA_PASSTHROUGH_PREF_STRING = "checkbox_enable_vr_camera_passthrough";
     public static final float DEFAULT_VR_LENS_SCALE = 1.0f;
 
     static final String DEFAULT_RESOLUTION = "1280x720";
@@ -133,6 +135,8 @@ public class PreferenceConfiguration {
     private static final int DEFAULT_VR_HORIZONTAL_CURVATURE_INT = 50;
     private static final int DEFAULT_VR_VERTICAL_CURVATURE_INT = 50;
     private static final boolean DEFAULT_ENABLE_VR_CAMERA_PIP = false;
+    private static final boolean DEFAULT_ENABLE_VR_SPATIAL_MODE = false;
+    private static final boolean DEFAULT_ENABLE_VR_CAMERA_PASSTHROUGH = false;
 
     public static final int FRAME_PACING_MIN_LATENCY = 0;
     public static final int FRAME_PACING_BALANCED = 1;
@@ -197,6 +201,8 @@ public class PreferenceConfiguration {
     public float vrRightLensOffset;
     public boolean lockVrLenses;
     public boolean enableVrCameraPip;
+    public boolean enableVrSpatialMode;
+    public boolean enableVrCameraPassthrough;
 
     public static boolean isNativeResolution(int width, int height) {
         // It's not a native resolution if it matches an existing resolution option
@@ -650,6 +656,8 @@ public class PreferenceConfiguration {
         config.vrRightLensOffset = prefs.getFloat(VR_RIGHT_LENS_OFFSET_PREF_STRING, 0.0f);
         config.lockVrLenses = prefs.getBoolean(VR_LENS_LOCK_PREF_STRING, false);
         config.enableVrCameraPip = prefs.getBoolean(VR_ENABLE_CAMERA_PIP_PREF_STRING, DEFAULT_ENABLE_VR_CAMERA_PIP);
+        config.enableVrSpatialMode = prefs.getBoolean(VR_SPATIAL_MODE_PREF_STRING, DEFAULT_ENABLE_VR_SPATIAL_MODE);
+        config.enableVrCameraPassthrough = prefs.getBoolean(VR_CAMERA_PASSTHROUGH_PREF_STRING, DEFAULT_ENABLE_VR_CAMERA_PASSTHROUGH);
         config.enablePip = prefs.getBoolean(ENABLE_PIP_PREF_STRING, DEFAULT_ENABLE_PIP);
         config.enablePerfOverlay = prefs.getBoolean(ENABLE_PERF_OVERLAY_STRING, DEFAULT_ENABLE_PERF_OVERLAY);
         config.bindAllUsb = prefs.getBoolean(BIND_ALL_USB_STRING, DEFAULT_BIND_ALL_USB);
