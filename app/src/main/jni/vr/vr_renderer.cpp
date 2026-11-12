@@ -134,6 +134,7 @@ VrMoonlightApp::VrMoonlightApp(JavaVM* vm, jobject activity, jobject asset_manag
       java_asset_mgr_(nullptr),
       asset_mgr_(nullptr),
       lens_distortion_(nullptr),
+      head_tracker_(nullptr),
       distortion_renderer_(nullptr),
       screen_params_changed_(false),
       device_params_changed_(true),
@@ -195,6 +196,11 @@ VrMoonlightApp::VrMoonlightApp(JavaVM* vm, jobject activity, jobject asset_manag
     Cardboard_initializeAndroid(java_vm_, activity_);
   }
 
+  for (int i = 0; i < 4; ++i) {
+    head_world_matrix_.m[i][i] = 1.0f;
+    window_anchor_matrix_.m[i][i] = 1.0f;
+  }
+
   UpdateModelMatrix();
   UpdateScreenGeometry();
   UpdateCameraModelMatrix();
@@ -206,6 +212,10 @@ VrMoonlightApp::VrMoonlightApp(JavaVM* vm, jobject activity, jobject asset_manag
 
 VrMoonlightApp::~VrMoonlightApp() {
   DestroyCardboardResources();
+  if (head_tracker_ != nullptr) {
+    CardboardHeadTracker_destroy(head_tracker_);
+    head_tracker_ = nullptr;
+  }
 
   if (render_texture_) {
     glDeleteTextures(1, &render_texture_);
@@ -333,7 +343,53 @@ void VrMoonlightApp::SetTextureTransform(const float* transform) {
 void VrMoonlightApp::SetVideoAspectRatio(float aspect_ratio) {
   if (std::isfinite(aspect_ratio) && aspect_ratio > 0.1f && aspect_ratio < 10.0f) {
     video_aspect_ratio_ = aspect_ratio;
+    UpdateModelMatrix();
   }
+}
+
+void VrMoonlightApp::SetDisplayMode(int mode) {
+  if (mode == 1) {
+    if (head_tracker_ == nullptr) {
+      head_tracker_ = CardboardHeadTracker_create();
+    }
+    if (head_tracker_ != nullptr) {
+      display_mode_ = 1;
+      CardboardHeadTracker_resume(head_tracker_);
+    } else {
+      display_mode_ = 0;
+      VR_LOGE("Unable to create Cardboard head tracker; falling back to fixed SBS mode");
+    }
+  } else {
+    display_mode_ = 0;
+    if (head_tracker_ != nullptr) {
+      CardboardHeadTracker_pause(head_tracker_);
+    }
+  }
+}
+
+void VrMoonlightApp::SetViewportOrientation(int android_rotation) {
+  switch (android_rotation) {
+    case 0:
+      viewport_orientation_ = kPortrait;
+      break;
+    case 1:
+      viewport_orientation_ = kLandscapeLeft;
+      break;
+    case 2:
+      viewport_orientation_ = kPortraitUpsideDown;
+      break;
+    case 3:
+    default:
+      viewport_orientation_ = kLandscapeRight;
+      break;
+  }
+}
+
+void VrMoonlightApp::SetWindowLocked(bool locked) {
+  if (locked && !window_locked_ && head_pose_valid_) {
+    window_anchor_matrix_ = head_world_matrix_;
+  }
+  window_locked_ = locked;
 }
 
 void VrMoonlightApp::SetLensDistortionStrength(float strength) {
@@ -341,15 +397,37 @@ void VrMoonlightApp::SetLensDistortionStrength(float strength) {
   lens_mesh_dirty_ = true;
 }
 
-void VrMoonlightApp::OnDrawFrame() {
+float VrMoonlightApp::OnDrawFrame() {
   if (screen_width_ == 0 || screen_height_ == 0 || !UpdateDeviceParams()) {
-    return;
+    return head_pitch_degrees_;
   }
 
-  RenderVideoToTexture();
+  if (display_mode_ == 1 && head_tracker_ != nullptr) {
+    float position[3] = {0.0f, 0.0f, 0.0f};
+    float orientation[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+    CardboardHeadTracker_getPose(head_tracker_, GetBootTimeNano(),
+                                 viewport_orientation_, position, orientation);
+    last_head_position_ = {position[0], position[1], position[2]};
+    last_head_orientation_ = Quatf(orientation[0], orientation[1],
+                                   orientation[2], orientation[3]);
 
-  // The offscreen texture contains two identical copies of the complete
-  // decoded frame: one in each half of the display.
+    head_world_matrix_ = last_head_orientation_.ToMatrix();
+    head_world_matrix_.m[0][3] = position[0];
+    head_world_matrix_.m[1][3] = position[1];
+    head_world_matrix_.m[2][3] = position[2];
+    head_pose_valid_ = true;
+
+    // In the Cardboard world frame, +Y is up and the head looks down -Z.
+    // A positive X pitch rotates the forward vector toward -Y.
+    const float sin_pitch = std::clamp(head_world_matrix_.m[1][2], -1.0f, 1.0f);
+    head_pitch_degrees_ = std::asin(sin_pitch) * 180.0f /
+                          3.14159265358979323846f;
+    RenderSpatialVideoToTexture();
+  } else {
+    head_pitch_degrees_ = 0.0f;
+    RenderVideoToTexture();
+  }
+
   left_eye_texture_description_.texture = render_texture_;
   left_eye_texture_description_.left_u = 0.0f;
   left_eye_texture_description_.right_u = 0.5f;
@@ -362,18 +440,23 @@ void VrMoonlightApp::OnDrawFrame() {
   right_eye_texture_description_.top_v = 1.0f;
   right_eye_texture_description_.bottom_v = 0.0f;
 
-  // Keep Cardboard's lens-distortion correction, but do not sample head pose.
   CardboardDistortionRenderer_renderEyeToDisplay(
       distortion_renderer_, 0, 0, 0, screen_width_, screen_height_,
       &left_eye_texture_description_, &right_eye_texture_description_);
+  return head_pitch_degrees_;
 }
 
 void VrMoonlightApp::OnPause() {
-  // Fixed side-by-side mode does not use head tracking.
+  if (head_tracker_ != nullptr) {
+    CardboardHeadTracker_pause(head_tracker_);
+  }
 }
 
 void VrMoonlightApp::OnResume() {
   device_params_changed_ = true;
+  if (display_mode_ == 1 && head_tracker_ != nullptr) {
+    CardboardHeadTracker_resume(head_tracker_);
+  }
 }
 
 void VrMoonlightApp::ResetRenderTarget() {
@@ -636,6 +719,84 @@ void VrMoonlightApp::RenderVideoToTexture() {
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
+void VrMoonlightApp::RenderSpatialVideoToTexture() {
+  if (framebuffer_ == 0 || render_texture_ == 0 || video_texture_ == 0 ||
+      lens_distortion_ == nullptr || !head_pose_valid_) {
+    return;
+  }
+
+  glBindFramebuffer(GL_FRAMEBUFFER, framebuffer_);
+  glDisable(GL_DEPTH_TEST);
+  glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glUseProgram(video_program_);
+  glEnableVertexAttribArray(position_attrib_);
+  glVertexAttribPointer(position_attrib_, 3, GL_FLOAT, GL_FALSE,
+                        sizeof(GLfloat) * 3, kQuadVertices);
+  glEnableVertexAttribArray(texcoord_attrib_);
+  glVertexAttribPointer(texcoord_attrib_, 2, GL_FLOAT, GL_FALSE, 0,
+                        kQuadTexCoords);
+  glActiveTexture(GL_TEXTURE0);
+  glUniform1i(sampler_uniform_, 0);
+
+  Matrix4x4 identity;
+  for (int i = 0; i < 4; ++i) identity.m[i][i] = 1.0f;
+  const std::array<float, 16> identity_gl = identity.ToGlArray();
+
+  // A camera image fills the world background only while the down-look
+  // passthrough trigger is active. The stream window is then drawn on top.
+  const int left_eye_width = screen_width_ / 2;
+  const int right_eye_width = screen_width_ - left_eye_width;
+  const auto draw_eye = [&](CardboardEye eye, int x, int width) {
+    if (width <= 0 || screen_height_ <= 0) return;
+    glViewport(x, 0, width, screen_height_);
+
+    if (camera_enabled_ && camera_texture_ != 0) {
+      glUniformMatrix4fv(texture_transform_uniform_, 1, GL_FALSE,
+                         camera_texture_transform_);
+      glUniformMatrix4fv(mvp_uniform_, 1, GL_FALSE, identity_gl.data());
+      glBindTexture(GL_TEXTURE_EXTERNAL_OES, camera_texture_);
+      glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+      glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
+    }
+
+    float projection_gl[16] = {};
+    float eye_from_head_gl[16] = {};
+    CardboardLensDistortion_getProjectionMatrix(
+        lens_distortion_, eye, 0.1f, 100.0f, projection_gl);
+    CardboardLensDistortion_getEyeFromHeadMatrix(
+        lens_distortion_, eye, eye_from_head_gl);
+
+    const Matrix4x4 projection = GetMatrixFromGlArray(projection_gl);
+    const Matrix4x4 eye_from_head = GetMatrixFromGlArray(eye_from_head_gl);
+    const Matrix4x4 head_view =
+        GetViewMatrixFromPose(last_head_position_, last_head_orientation_);
+    const Matrix4x4 view_projection = projection * eye_from_head * head_view;
+
+    // Unlocked: the window follows the headset. Locked: preserve the world
+    // transform captured when the user pressed the lock button.
+    const Matrix4x4 window_world =
+        (window_locked_ ? window_anchor_matrix_ : head_world_matrix_) *
+        model_matrix_;
+    const Matrix4x4 mvp = view_projection * window_world;
+    const std::array<float, 16> mvp_gl = mvp.ToGlArray();
+
+    glUniformMatrix4fv(texture_transform_uniform_, 1, GL_FALSE,
+                       texture_transform_);
+    glUniformMatrix4fv(mvp_uniform_, 1, GL_FALSE, mvp_gl.data());
+    glBindTexture(GL_TEXTURE_EXTERNAL_OES, video_texture_);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
+  };
+
+  draw_eye(kLeft, 0, left_eye_width);
+  draw_eye(kRight, left_eye_width, right_eye_width);
+
+  glDisableVertexAttribArray(position_attrib_);
+  glDisableVertexAttribArray(texcoord_attrib_);
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
 void VrMoonlightApp::DestroyCardboardResources() {
   if (distortion_renderer_ != nullptr) {
     CardboardDistortionRenderer_destroy(distortion_renderer_);
@@ -648,7 +809,10 @@ void VrMoonlightApp::DestroyCardboardResources() {
 }
 
 void VrMoonlightApp::RecenterView() {
-  // There is no tracked pose to recenter in fixed side-by-side mode.
+  if (head_tracker_ != nullptr) {
+    CardboardHeadTracker_recenter(head_tracker_);
+    head_pose_valid_ = false;
+  }
 }
 
 void VrMoonlightApp::SetScreenDistance(float meters) {
@@ -707,7 +871,9 @@ void VrMoonlightApp::AdjustScreenPosition(float deltaX, float deltaY) {
 
 void VrMoonlightApp::AdjustScreenRotation(float deltaRadians) {
   screen_rotation_radians_ += deltaRadians;
-  screen_rotation_radians_ = std::clamp(screen_rotation_radians_, -1.5708f, 1.5708f);
+  const float two_pi = 6.28318530717958647692f;
+  while (screen_rotation_radians_ >= two_pi) screen_rotation_radians_ -= two_pi;
+  while (screen_rotation_radians_ < 0.0f) screen_rotation_radians_ += two_pi;
   UpdateModelMatrix();
 }
 
@@ -779,7 +945,7 @@ void VrMoonlightApp::AdjustRightLensOffset(float delta_x) {
  
 void VrMoonlightApp::UpdateModelMatrix() {
   const float half_width = kScreenWidthMeters * 0.5f * screen_size_multiplier_;
-  const float half_height = half_width / kScreenAspectRatio;
+  const float half_height = half_width / video_aspect_ratio_;
   const std::array<float, 3> scale = {half_width, -half_height, 1.0f};
   const std::array<float, 3> translation = {0.0f, 0.0f, -screen_distance_meters_};
 
