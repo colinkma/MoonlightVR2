@@ -26,10 +26,13 @@ class VrMoonlightApp {
   void SetTextureTransform(const float* transform);
   void SetVideoAspectRatio(float aspectRatio);
   void SetLensDistortionStrength(float strength);
-  void OnDrawFrame();
+  float OnDrawFrame();
   void OnPause();
   void OnResume();
   void SetScreenDistance(float meters);
+  void SetDisplayMode(int mode);
+  void SetViewportOrientation(int androidRotation);
+  void SetWindowLocked(bool locked);
   void SetScreenSize(float sizeMultiplier);
   void AdjustScreenDistance(float deltaMeters);
   void AdjustScreenSize(float deltaMultiplier);
@@ -59,6 +62,7 @@ class VrMoonlightApp {
   void UpdateRenderTarget();
   bool UpdateDeviceParams();
   void RenderVideoToTexture();
+  void RenderSpatialVideoToTexture();
   void DestroyCardboardResources();
   void UpdateModelMatrix();
   void UpdateScreenGeometry();
@@ -74,12 +78,22 @@ class VrMoonlightApp {
   AAssetManager* asset_mgr_;
 
   CardboardLensDistortion* lens_distortion_;
+  CardboardHeadTracker* head_tracker_;
   CardboardDistortionRenderer* distortion_renderer_;
 
   CardboardEyeTextureDescription left_eye_texture_description_;
   CardboardEyeTextureDescription right_eye_texture_description_;
 
   bool screen_params_changed_;
+  int display_mode_ = 0;
+  CardboardViewportOrientation viewport_orientation_ = kLandscapeLeft;
+  bool window_locked_ = false;
+  bool head_pose_valid_ = false;
+  std::array<float, 3> last_head_position_ = {0.0f, 0.0f, 0.0f};
+  Quatf last_head_orientation_ = Quatf(0.0f, 0.0f, 0.0f, 1.0f);
+  Matrix4x4 head_world_matrix_;
+  Matrix4x4 window_anchor_matrix_;
+  float head_pitch_degrees_ = 0.0f;
   bool device_params_changed_;
   int screen_width_;
   int screen_height_;
