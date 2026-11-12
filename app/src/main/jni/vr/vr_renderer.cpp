@@ -901,7 +901,7 @@ void VrMoonlightApp::DrawSpatialControls(const Matrix4x4& vp,const Matrix4x4& wi
     rect(centers[i],1.18f,0.035f,0.31f,0.20f,gaze_target_==i?focus:normal);
     if(i<2) {
       rect(centers[i],1.18f,0.046f,0.105f,0.012f,white);
-      if(i==1) rect(centers[i],-1.18f,0.047f,0.012f,0.105f,white);
+      if(i==1) rect(centers[i],1.18f,0.047f,0.012f,0.105f,white);
     } else if(i<4) {
       rect(centers[i]-0.035f,1.18f,0.046f,0.012f,0.085f,white);
       rect(centers[i]+0.035f,1.18f,0.046f,0.012f,0.085f,white);
