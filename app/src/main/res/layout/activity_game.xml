@@ -65,74 +65,7 @@
         android:clickable="false"
         android:visibility="gone" />
 
-    <LinearLayout
-        android:id="@+id/vrSpatialControls"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="top|center_horizontal"
-        android:layout_marginTop="60dp"
-        android:background="#B3202020"
-        android:gravity="center"
-        android:orientation="horizontal"
-        android:padding="4dp"
-        android:visibility="gone">
 
-        <TextView
-            android:id="@+id/vrSpatialDistanceNear"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:clickable="true"
-            android:focusable="true"
-            android:paddingLeft="10dp"
-            android:paddingRight="10dp"
-            android:paddingTop="8dp"
-            android:paddingBottom="8dp"
-            android:text="@string/vr_spatial_distance_near"
-            android:textColor="#FFFFFFFF"
-            android:textSize="13sp" />
-
-        <TextView
-            android:id="@+id/vrSpatialDistanceFar"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:clickable="true"
-            android:focusable="true"
-            android:paddingLeft="10dp"
-            android:paddingRight="10dp"
-            android:paddingTop="8dp"
-            android:paddingBottom="8dp"
-            android:text="@string/vr_spatial_distance_far"
-            android:textColor="#FFFFFFFF"
-            android:textSize="13sp" />
-
-        <TextView
-            android:id="@+id/vrSpatialLockButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:clickable="true"
-            android:focusable="true"
-            android:paddingLeft="10dp"
-            android:paddingRight="10dp"
-            android:paddingTop="8dp"
-            android:paddingBottom="8dp"
-            android:text="@string/vr_spatial_lock"
-            android:textColor="#FFFFFFFF"
-            android:textSize="13sp" />
-
-        <TextView
-            android:id="@+id/vrSpatialRotateButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:clickable="true"
-            android:focusable="true"
-            android:paddingLeft="10dp"
-            android:paddingRight="10dp"
-            android:paddingTop="8dp"
-            android:paddingBottom="8dp"
-            android:text="@string/vr_spatial_rotate"
-            android:textColor="#FFFFFFFF"
-            android:textSize="13sp" />
-    </LinearLayout>
 
     <TextView
         android:id="@+id/vrLensLockButton"
