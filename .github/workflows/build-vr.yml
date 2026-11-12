@@ -5,7 +5,7 @@ on:
   push:
     branches:
       - main
-      - feature/cardboard-sbs-display
+      - feature/spatial-window-camera
     tags:
       - '*'
 
@@ -28,6 +28,9 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '21'
+
+      - name: Restore large native libraries
+        run: bash scripts/sync-native-libs.sh
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
