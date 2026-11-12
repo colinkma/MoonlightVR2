@@ -2,6 +2,7 @@
 #define VR_RENDERER_H_
 
 #include <array>
+#include <cstdint>
 #include <vector>
 
 #include <android/asset_manager.h>
@@ -63,6 +64,9 @@ class VrMoonlightApp {
   bool UpdateDeviceParams();
   void RenderVideoToTexture();
   void RenderSpatialVideoToTexture();
+  void UpdateSpatialGaze(const Matrix4x4& windowWorld);
+  void DrawSpatialControls(const Matrix4x4& viewProjection,
+                           const Matrix4x4& windowWorld);
   void DestroyCardboardResources();
   void UpdateModelMatrix();
   void UpdateScreenGeometry();
@@ -101,6 +105,15 @@ class VrMoonlightApp {
 
   GLuint video_program_;
   GLuint line_program_;
+  GLuint spatial_ui_program_ = 0;
+  GLint spatial_ui_pos_attrib_ = -1;
+  GLint spatial_ui_mvp_uniform_ = -1;
+  GLint spatial_ui_color_uniform_ = -1;
+  static constexpr float kGazeDwellSeconds = 0.8f;
+  int gaze_target_ = -1;
+  float gaze_dwell_seconds_ = 0.0f;
+  int64_t last_gaze_frame_nano_ = 0;
+  bool gaze_action_armed_ = true;
   GLuint video_texture_;
   GLuint render_texture_;
   GLuint framebuffer_;
