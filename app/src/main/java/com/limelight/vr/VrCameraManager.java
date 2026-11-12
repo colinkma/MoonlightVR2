@@ -27,8 +27,8 @@ public class VrCameraManager {
     private Surface cameraSurface;
     private HandlerThread cameraThread;
     private Handler cameraHandler;
-    private boolean isStarted = false;
-    private boolean isOpening = false;
+    private volatile boolean isStarted = false;
+    private volatile boolean isOpening = false;
 
     public VrCameraManager(Context context) {
         this.context = context;
@@ -131,6 +131,10 @@ public class VrCameraManager {
                     new CameraCaptureSession.StateCallback() {
                         @Override
                         public void onConfigured(CameraCaptureSession session) {
+                            if (!isOpening) {
+                                session.close();
+                                return;
+                            }
                             Log.i(TAG, "Capture session configured successfully");
                             captureSession = session;
                             startPreview();
