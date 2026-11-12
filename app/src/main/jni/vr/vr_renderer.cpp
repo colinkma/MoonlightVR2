@@ -809,6 +809,11 @@ void VrMoonlightApp::RenderSpatialVideoToTexture() {
     if(width<=0||screen_height_<=0) return;
     glViewport(x,0,width,screen_height_);
     glUseProgram(video_program_);
+    glEnableVertexAttribArray(position_attrib_);
+    glVertexAttribPointer(position_attrib_,3,GL_FLOAT,GL_FALSE,
+                          sizeof(GLfloat)*3,kQuadVertices);
+    glEnableVertexAttribArray(texcoord_attrib_);
+    glVertexAttribPointer(texcoord_attrib_,2,GL_FLOAT,GL_FALSE,0,kQuadTexCoords);
     if(camera_enabled_&&camera_texture_) {
       glUniformMatrix4fv(texture_transform_uniform_,1,GL_FALSE,camera_texture_transform_);
       glUniformMatrix4fv(mvp_uniform_,1,GL_FALSE,identity_gl.data());
