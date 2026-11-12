@@ -47,6 +47,17 @@
             android:title="@string/title_checkbox_enable_vr"
             android:summary="@string/summary_checkbox_enable_vr"
             android:defaultValue="true" />
+        <CheckBoxPreference
+            android:key="checkbox_enable_vr_spatial_mode"
+            android:title="@string/title_checkbox_enable_vr_spatial_mode"
+            android:summary="@string/summary_checkbox_enable_vr_spatial_mode"
+            android:defaultValue="false" />
+        <CheckBoxPreference
+            android:key="checkbox_enable_vr_camera_passthrough"
+            android:dependency="checkbox_enable_vr_spatial_mode"
+            android:title="@string/title_checkbox_enable_vr_camera_passthrough"
+            android:summary="@string/summary_checkbox_enable_vr_camera_passthrough"
+            android:defaultValue="false" />
         <com.limelight.preferences.SeekBarPreference
             android:key="seekbar_vr_lens_distortion_strength"
             android:dialogMessage="@string/summary_seekbar_vr_lens_distortion_strength"
