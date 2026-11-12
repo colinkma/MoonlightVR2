@@ -28,17 +28,18 @@ public class VrCameraManager {
     private HandlerThread cameraThread;
     private Handler cameraHandler;
     private boolean isStarted = false;
+    private boolean isOpening = false;
 
     public VrCameraManager(Context context) {
         this.context = context;
     }
 
-    public boolean isStarted() {
-        return isStarted;
+    public synchronized boolean isStarted() {
+        return isStarted || isOpening;
     }
 
-    public void startCamera(Surface surface) {
-        if (isStarted) {
+    public synchronized void startCamera(Surface surface) {
+        if (isStarted || isOpening) {
             Log.w(TAG, "Camera already started");
             return;
         }
@@ -49,6 +50,7 @@ public class VrCameraManager {
             return;
         }
 
+        isOpening = true;
         cameraSurface = surface;
         cameraManager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
 
@@ -60,12 +62,14 @@ public class VrCameraManager {
             String cameraId = getRearCameraId();
             if (cameraId == null) {
                 Log.e(TAG, "No rear camera found");
+                stopCamera();
                 return;
             }
 
             cameraManager.openCamera(cameraId, stateCallback, cameraHandler);
-        } catch (CameraAccessException e) {
+        } catch (CameraAccessException | SecurityException e) {
             Log.e(TAG, "Failed to open camera", e);
+            stopCamera();
         }
     }
 
@@ -87,6 +91,10 @@ public class VrCameraManager {
     private final CameraDevice.StateCallback stateCallback = new CameraDevice.StateCallback() {
         @Override
         public void onOpened(CameraDevice camera) {
+            if (!isOpening) {
+                camera.close();
+                return;
+            }
             cameraDevice = camera;
             createCaptureSession();
         }
@@ -95,12 +103,16 @@ public class VrCameraManager {
         public void onDisconnected(CameraDevice camera) {
             camera.close();
             cameraDevice = null;
+            isStarted = false;
+            isOpening = false;
         }
 
         @Override
         public void onError(CameraDevice camera, int error) {
             camera.close();
             cameraDevice = null;
+            isStarted = false;
+            isOpening = false;
             Log.e(TAG, "Camera error: " + error);
         }
     };
@@ -126,7 +138,10 @@ public class VrCameraManager {
 
                         @Override
                         public void onConfigureFailed(CameraCaptureSession session) {
+                            isStarted = false;
+                            isOpening = false;
                             Log.e(TAG, "Camera configuration FAILED");
+                            session.close();
                         }
                     },
                     cameraHandler
@@ -150,14 +165,18 @@ public class VrCameraManager {
 
             captureSession.setRepeatingRequest(previewRequest.build(), null, cameraHandler);
             isStarted = true;
+            isOpening = false;
             Log.i(TAG, "Camera preview started");
-        } catch (CameraAccessException e) {
+        } catch (CameraAccessException | IllegalStateException e) {
+            isStarted = false;
+            isOpening = false;
             Log.e(TAG, "Failed to start preview", e);
         }
     }
 
-    public void stopCamera() {
+    public synchronized void stopCamera() {
         isStarted = false;
+        isOpening = false;
         if (captureSession != null) {
             try {
                 captureSession.stopRepeating();
