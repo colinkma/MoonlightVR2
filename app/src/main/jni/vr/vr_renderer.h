@@ -64,9 +64,8 @@ class VrMoonlightApp {
   bool UpdateDeviceParams();
   void RenderVideoToTexture();
   void RenderSpatialVideoToTexture();
-  void UpdateSpatialGaze(const Matrix4x4& windowWorld);
-  void DrawSpatialControls(const Matrix4x4& viewProjection,
-                           const Matrix4x4& windowWorld);
+  void UpdateSpatialGaze();
+  void DrawSpatialControls(const Matrix4x4& viewProjection);
   void DestroyCardboardResources();
   void UpdateModelMatrix();
   void UpdateScreenGeometry();
