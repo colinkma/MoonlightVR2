@@ -49,6 +49,7 @@
             android:defaultValue="true" />
         <CheckBoxPreference
             android:key="checkbox_enable_vr_spatial_mode"
+            android:dependency="checkbox_enable_vr"
             android:title="@string/title_checkbox_enable_vr_spatial_mode"
             android:summary="@string/summary_checkbox_enable_vr_spatial_mode"
             android:defaultValue="false" />
