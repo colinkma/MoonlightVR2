@@ -405,6 +405,7 @@ void VrMoonlightApp::SetDisplayMode(int mode) {
     }
     if (head_tracker_ != nullptr) {
       display_mode_ = 1;
+      toolbar_anchor_valid_ = false;
       CardboardHeadTracker_resume(head_tracker_);
     } else {
       display_mode_ = 0;
@@ -412,6 +413,7 @@ void VrMoonlightApp::SetDisplayMode(int mode) {
     }
   } else {
     display_mode_ = 0;
+    toolbar_anchor_valid_ = false;
     if (head_tracker_ != nullptr) {
       CardboardHeadTracker_pause(head_tracker_);
     }
@@ -479,6 +481,10 @@ float VrMoonlightApp::OnDrawFrame() {
     head_world_matrix_.m[1][3] = 0.0f;
     head_world_matrix_.m[2][3] = 0.0f;
     head_pose_valid_ = true;
+    if (!toolbar_anchor_valid_) {
+      toolbar_anchor_matrix_ = head_world_matrix_;
+      toolbar_anchor_valid_ = true;
+    }
     if (window_locked_ && window_lock_pending_) {
       window_anchor_matrix_ = head_world_matrix_;
       window_lock_pending_ = false;
@@ -844,7 +850,7 @@ void VrMoonlightApp::UpdateSpatialGaze() {
   // Keep the control strip in a stable 3D head-space location so it remains
   // selectable even while the stream window is in follow-head mode.
   const Matrix4x4 control_world =
-      head_world_matrix_ * GetTranslationMatrix({0.0f, -0.62f, -1.35f}) *
+      toolbar_anchor_matrix_ * GetTranslationMatrix({0.0f, -0.62f, -1.35f}) *
       GetScaleMatrix({0.75f, 0.50f, 1.0f});
   Matrix4x4 inverse;
   if(!InvertMatrix(control_world,inverse)) { gaze_target_=-1; gaze_dwell_seconds_=0.f; gaze_action_armed_=true; return; }
@@ -890,7 +896,7 @@ void VrMoonlightApp::UpdateSpatialGaze() {
 
 void VrMoonlightApp::DrawSpatialControls(const Matrix4x4& vp) {
   const Matrix4x4 control_world =
-      head_world_matrix_ * GetTranslationMatrix({0.0f, -0.62f, -1.35f}) *
+      toolbar_anchor_matrix_ * GetTranslationMatrix({0.0f, -0.62f, -1.35f}) *
       GetScaleMatrix({0.75f, 0.50f, 1.0f});
   if(!spatial_ui_program_) return;
   glUseProgram(spatial_ui_program_);
@@ -962,6 +968,7 @@ void VrMoonlightApp::RecenterView() {
   if (head_tracker_ != nullptr) {
     CardboardHeadTracker_recenter(head_tracker_);
     head_pose_valid_ = false;
+    toolbar_anchor_valid_ = false;
   }
 }
 
