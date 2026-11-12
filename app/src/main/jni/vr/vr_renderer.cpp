@@ -386,8 +386,15 @@ void VrMoonlightApp::SetViewportOrientation(int android_rotation) {
 }
 
 void VrMoonlightApp::SetWindowLocked(bool locked) {
-  if (locked && !window_locked_ && head_pose_valid_) {
-    window_anchor_matrix_ = head_world_matrix_;
+  if (locked && !window_locked_) {
+    if (head_pose_valid_) {
+      window_anchor_matrix_ = head_world_matrix_;
+      window_lock_pending_ = false;
+    } else {
+      window_lock_pending_ = true;
+    }
+  } else if (!locked) {
+    window_lock_pending_ = false;
   }
   window_locked_ = locked;
 }
@@ -416,6 +423,10 @@ float VrMoonlightApp::OnDrawFrame() {
     head_world_matrix_.m[1][3] = position[1];
     head_world_matrix_.m[2][3] = position[2];
     head_pose_valid_ = true;
+    if (window_locked_ && window_lock_pending_) {
+      window_anchor_matrix_ = head_world_matrix_;
+      window_lock_pending_ = false;
+    }
 
     // In the Cardboard world frame, +Y is up and the head looks down -Z.
     // A positive X pitch rotates the forward vector toward -Y.
