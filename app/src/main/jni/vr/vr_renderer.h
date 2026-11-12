@@ -88,6 +88,7 @@ class VrMoonlightApp {
   int display_mode_ = 0;
   CardboardViewportOrientation viewport_orientation_ = kLandscapeLeft;
   bool window_locked_ = false;
+  bool window_lock_pending_ = false;
   bool head_pose_valid_ = false;
   std::array<float, 3> last_head_position_ = {0.0f, 0.0f, 0.0f};
   Quatf last_head_orientation_ = Quatf(0.0f, 0.0f, 0.0f, 1.0f);
