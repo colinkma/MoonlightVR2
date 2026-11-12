@@ -803,7 +803,7 @@ void VrMoonlightApp::RenderSpatialVideoToTexture() {
   Matrix4x4 identity; for(int i=0;i<4;++i) identity.m[i][i]=1.f;
   const auto identity_gl=identity.ToGlArray();
   const Matrix4x4 window_world=(window_locked_?window_anchor_matrix_:head_world_matrix_)*model_matrix_;
-  UpdateSpatialGaze(window_world);
+  UpdateSpatialGaze();
   const int left_width=screen_width_/2, right_width=screen_width_-left_width;
   const auto draw_eye=[&](CardboardEye eye,int x,int width) {
     if(width<=0||screen_height_<=0) return;
@@ -832,7 +832,7 @@ void VrMoonlightApp::RenderSpatialVideoToTexture() {
     glUniformMatrix4fv(mvp_uniform_,1,GL_FALSE,mvp.data());
     glBindTexture(GL_TEXTURE_EXTERNAL_OES,video_texture_);
     glDrawArrays(GL_TRIANGLE_STRIP,0,4); glBindTexture(GL_TEXTURE_EXTERNAL_OES,0);
-    DrawSpatialControls(vp,window_world);
+    DrawSpatialControls(vp);
   };
   draw_eye(kLeft,0,left_width); draw_eye(kRight,left_width,right_width);
   glDisableVertexAttribArray(position_attrib_);
@@ -840,9 +840,14 @@ void VrMoonlightApp::RenderSpatialVideoToTexture() {
   glBindFramebuffer(GL_FRAMEBUFFER,0);
 }
 
-void VrMoonlightApp::UpdateSpatialGaze(const Matrix4x4& window_world) {
+void VrMoonlightApp::UpdateSpatialGaze() {
+  // Keep the control strip in a stable 3D head-space location so it remains
+  // selectable even while the stream window is in follow-head mode.
+  const Matrix4x4 control_world =
+      head_world_matrix_ * GetTranslationMatrix({0.0f, -0.62f, -1.35f}) *
+      GetScaleMatrix({0.75f, 0.50f, 1.0f});
   Matrix4x4 inverse;
-  if(!InvertMatrix(window_world,inverse)) { gaze_target_=-1; gaze_dwell_seconds_=0.f; gaze_action_armed_=true; return; }
+  if(!InvertMatrix(control_world,inverse)) { gaze_target_=-1; gaze_dwell_seconds_=0.f; gaze_action_armed_=true; return; }
   const std::array<float,4> origin={0.f,0.f,0.f,1.f};
   const std::array<float,4> forward={-head_world_matrix_.m[0][2],-head_world_matrix_.m[1][2],-head_world_matrix_.m[2][2],0.f};
   const auto o=inverse*origin, d=inverse*forward;
@@ -854,7 +859,7 @@ void VrMoonlightApp::UpdateSpatialGaze(const Matrix4x4& window_world) {
     const float centers[]={-0.80f,-0.40f,0.f,0.40f,0.80f};
     gaze_target_=-1;
     if(t>0.f) for(int i=0;i<5;++i)
-      if(std::fabs(x-centers[i])<0.145f&&std::fabs(y-1.18f)<0.105f) { gaze_target_=i; break; }
+      if(std::fabs(x-centers[i])<0.145f&&std::fabs(y)<0.105f) { gaze_target_=i; break; }
   }
   const int64_t now=GetBootTimeNano();
   if (gaze_target_ != previous_gaze_target_) {
@@ -883,7 +888,10 @@ void VrMoonlightApp::UpdateSpatialGaze(const Matrix4x4& window_world) {
   }
 }
 
-void VrMoonlightApp::DrawSpatialControls(const Matrix4x4& vp,const Matrix4x4& window_world) {
+void VrMoonlightApp::DrawSpatialControls(const Matrix4x4& vp) {
+  const Matrix4x4 control_world =
+      head_world_matrix_ * GetTranslationMatrix({0.0f, -0.62f, -1.35f}) *
+      GetScaleMatrix({0.75f, 0.50f, 1.0f});
   if(!spatial_ui_program_) return;
   glUseProgram(spatial_ui_program_);
   glEnableVertexAttribArray(spatial_ui_pos_attrib_);
@@ -891,7 +899,7 @@ void VrMoonlightApp::DrawSpatialControls(const Matrix4x4& vp,const Matrix4x4& wi
   const float centers[]={-0.80f,-0.40f,0.f,0.40f,0.80f};
   const auto rect=[&](float x,float y,float z,float w,float h,const float* color) {
     const Matrix4x4 local=GetTranslationMatrix({x,y,z})*GetScaleMatrix({w,h,1.f});
-    const auto mvp=(vp*window_world*local).ToGlArray();
+    const auto mvp=(vp*control_world*local).ToGlArray();
     glUniformMatrix4fv(spatial_ui_mvp_uniform_,1,GL_FALSE,mvp.data());
     glUniform4fv(spatial_ui_color_uniform_,1,color);
     glDrawArrays(GL_TRIANGLES,0,6);
@@ -900,25 +908,25 @@ void VrMoonlightApp::DrawSpatialControls(const Matrix4x4& vp,const Matrix4x4& wi
   const float normal[]={0.13f,0.16f,0.21f,1.f};
   const float focus[]={0.08f,0.38f,0.72f,1.f};
   const float white[]={0.9f,0.94f,1.f,1.f};
-  rect(0.f,1.18f,0.025f,2.02f,0.27f,panel);
+  rect(0.f,0.f,0.025f,2.02f,0.27f,panel);
   for(int i=0;i<5;++i) {
-    rect(centers[i],1.18f,0.035f,0.31f,0.20f,gaze_target_==i?focus:normal);
+    rect(centers[i],0.f,0.035f,0.31f,0.20f,gaze_target_==i?focus:normal);
     if(i<2) {
       rect(centers[i],1.18f,0.046f,0.105f,0.012f,white);
       if(i==1) rect(centers[i],1.18f,0.047f,0.012f,0.105f,white);
     } else if(i<4) {
-      rect(centers[i]-0.035f,1.18f,0.046f,0.012f,0.085f,white);
-      rect(centers[i]+0.035f,1.18f,0.046f,0.012f,0.085f,white);
+      rect(centers[i]-0.035f,0.f,0.046f,0.012f,0.085f,white);
+      rect(centers[i]+0.035f,0.f,0.046f,0.012f,0.085f,white);
       rect(centers[i],1.18f,0.046f,0.06f,0.012f,white);
       if(i==3) rect(centers[i],1.18f,0.047f,0.012f,0.06f,white);
     } else {
       rect(centers[i],-1.18f,0.046f,0.075f,0.055f,white);
-      rect(centers[i],1.14f,0.046f,0.055f,0.025f,white);
+      rect(centers[i],0.04f,0.046f,0.055f,0.025f,white);
     }
     if(gaze_target_==i&&gaze_action_armed_) {
       const float progress[]={0.3f,0.9f,1.f,1.f};
       const float amount=std::clamp(gaze_dwell_seconds_/kGazeDwellSeconds,0.f,1.f);
-      rect(centers[i]-0.145f+0.145f*amount,1.265f,0.05f,0.29f*amount,0.012f,progress);
+      rect(centers[i]-0.145f+0.145f*amount,-0.105f,0.05f,0.29f*amount,0.012f,progress);
     }
   }
 
