@@ -74,7 +74,6 @@ android {
 
     buildTypes {
         debug {
-            applicationIdSuffix ".debug"
             resValue "string", "app_label", "MoonlightVR"
 
             minifyEnabled true
