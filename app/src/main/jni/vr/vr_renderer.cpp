@@ -847,8 +847,8 @@ void VrMoonlightApp::RenderSpatialVideoToTexture() {
 }
 
 void VrMoonlightApp::UpdateSpatialGaze() {
-  // Keep the control strip in a stable 3D head-space location so it remains
-  // selectable even while the stream window is in follow-head mode.
+  // Keep the control strip in the initial orientation frame so the user can
+  // look down toward it even while the stream window follows the headset.
   const Matrix4x4 control_world =
       toolbar_anchor_matrix_ * GetTranslationMatrix({0.0f, -0.62f, -1.35f}) *
       GetScaleMatrix({0.75f, 0.50f, 1.0f});
