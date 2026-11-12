@@ -97,6 +97,8 @@ class VrMoonlightApp {
   Quatf last_head_orientation_ = Quatf(0.0f, 0.0f, 0.0f, 1.0f);
   Matrix4x4 head_world_matrix_;
   Matrix4x4 window_anchor_matrix_;
+  Matrix4x4 toolbar_anchor_matrix_;
+  bool toolbar_anchor_valid_ = false;
   float head_pitch_degrees_ = 0.0f;
   bool device_params_changed_;
   int screen_width_;
