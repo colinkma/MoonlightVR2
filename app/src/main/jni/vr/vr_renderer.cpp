@@ -6,6 +6,7 @@
 #include <GLES2/gl2ext.h>
 
 #include <algorithm>
+#include <chrono>
 #include <array>
 #include <cmath>
 #include <iterator>
@@ -126,6 +127,35 @@ const GLfloat kSkyboxVertices[] = {
      1.0f, -1.0f, -1.0f,  -1.0f, -1.0f,  1.0f,   1.0f, -1.0f,  1.0f
 };
 
+
+const char kSpatialUiVertexShader[] =
+    "attribute vec4 a_Position;\n"
+    "uniform mat4 u_MVP;\n"
+    "void main() { gl_Position = u_MVP * a_Position; }";
+const char kSpatialUiFragmentShader[] =
+    "precision mediump float;\n"
+    "uniform vec4 u_Color;\n"
+    "void main() { gl_FragColor = u_Color; }";
+const GLfloat kSpatialUiQuad[] = {
+    -0.5f,-0.5f,0.f, 0.5f,-0.5f,0.f, -0.5f,0.5f,0.f,
+    -0.5f,0.5f,0.f, 0.5f,-0.5f,0.f, 0.5f,0.5f,0.f
+};
+bool InvertMatrix(const Matrix4x4& input, Matrix4x4& output) {
+  float a[4][8] = {};
+  for (int r=0;r<4;++r) { for (int c=0;c<4;++c) a[r][c]=input.m[r][c]; a[r][r+4]=1.f; }
+  for (int c=0;c<4;++c) {
+    int pivot=c;
+    for (int r=c+1;r<4;++r) if (std::fabs(a[r][c])>std::fabs(a[pivot][c])) pivot=r;
+    if (std::fabs(a[pivot][c])<1e-7f) return false;
+    if (pivot!=c) for (int k=0;k<8;++k) std::swap(a[pivot][k],a[c][k]);
+    const float d=a[c][c]; for (int k=0;k<8;++k) a[c][k]/=d;
+    for (int r=0;r<4;++r) if (r!=c) { const float f=a[r][c]; for (int k=0;k<8;++k) a[r][k]-=f*a[c][k]; }
+  }
+  output=Matrix4x4();
+  for (int r=0;r<4;++r) for (int c=0;c<4;++c) output.m[r][c]=a[r][c+4];
+  return true;
+}
+
 }  // namespace
 
 VrMoonlightApp::VrMoonlightApp(JavaVM* vm, jobject activity, jobject asset_manager)
@@ -226,6 +256,9 @@ VrMoonlightApp::~VrMoonlightApp() {
   if (line_program_) {
     glDeleteProgram(line_program_);
   }
+  if (spatial_ui_program_) {
+    glDeleteProgram(spatial_ui_program_);
+  }
   if (skybox_program_) {
     glDeleteProgram(skybox_program_);
   }
@@ -277,6 +310,25 @@ jint VrMoonlightApp::OnSurfaceCreated(JNIEnv* env) {
     glDeleteShader(line_fs);
     line_pos_attrib_ = glGetAttribLocation(line_program_, "a_Position");
     line_mvp_uniform_ = glGetUniformLocation(line_program_, "u_MVP");
+  }
+
+
+  if (spatial_ui_program_ == 0) {
+    GLuint vs=LoadGLShader(GL_VERTEX_SHADER,kSpatialUiVertexShader);
+    GLuint fs=LoadGLShader(GL_FRAGMENT_SHADER,kSpatialUiFragmentShader);
+    if (vs && fs) {
+      spatial_ui_program_=glCreateProgram();
+      glAttachShader(spatial_ui_program_,vs); glAttachShader(spatial_ui_program_,fs);
+      glLinkProgram(spatial_ui_program_);
+      GLint linked=GL_FALSE; glGetProgramiv(spatial_ui_program_,GL_LINK_STATUS,&linked);
+      if (!linked) { glDeleteProgram(spatial_ui_program_); spatial_ui_program_=0; }
+    }
+    if (vs) glDeleteShader(vs); if (fs) glDeleteShader(fs);
+    if (spatial_ui_program_) {
+      spatial_ui_pos_attrib_=glGetAttribLocation(spatial_ui_program_,"a_Position");
+      spatial_ui_mvp_uniform_=glGetUniformLocation(spatial_ui_program_,"u_MVP");
+      spatial_ui_color_uniform_=glGetUniformLocation(spatial_ui_program_,"u_Color");
+    }
   }
 
   if (skybox_program_ == 0) {
@@ -735,84 +787,131 @@ void VrMoonlightApp::RenderVideoToTexture() {
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void VrMoonlightApp::RenderSpatialVideoToTexture() {
-  if (framebuffer_ == 0 || render_texture_ == 0 || video_texture_ == 0 ||
-      lens_distortion_ == nullptr || !head_pose_valid_) {
-    return;
-  }
 
-  glBindFramebuffer(GL_FRAMEBUFFER, framebuffer_);
+void VrMoonlightApp::RenderSpatialVideoToTexture() {
+  if (!framebuffer_ || !render_texture_ || !video_texture_ ||
+      !lens_distortion_ || !head_pose_valid_) return;
+  glBindFramebuffer(GL_FRAMEBUFFER,framebuffer_);
   glDisable(GL_DEPTH_TEST);
-  glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glClearColor(0.f,0.f,0.f,1.f);
+  glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
   glUseProgram(video_program_);
   glEnableVertexAttribArray(position_attrib_);
-  glVertexAttribPointer(position_attrib_, 3, GL_FLOAT, GL_FALSE,
-                        sizeof(GLfloat) * 3, kQuadVertices);
+  glVertexAttribPointer(position_attrib_,3,GL_FLOAT,GL_FALSE,sizeof(GLfloat)*3,kQuadVertices);
   glEnableVertexAttribArray(texcoord_attrib_);
-  glVertexAttribPointer(texcoord_attrib_, 2, GL_FLOAT, GL_FALSE, 0,
-                        kQuadTexCoords);
-  glActiveTexture(GL_TEXTURE0);
-  glUniform1i(sampler_uniform_, 0);
-
-  Matrix4x4 identity;
-  for (int i = 0; i < 4; ++i) identity.m[i][i] = 1.0f;
-  const std::array<float, 16> identity_gl = identity.ToGlArray();
-
-  // A camera image fills the world background only while the down-look
-  // passthrough trigger is active. The stream window is then drawn on top.
-  const int left_eye_width = screen_width_ / 2;
-  const int right_eye_width = screen_width_ - left_eye_width;
-  const auto draw_eye = [&](CardboardEye eye, int x, int width) {
-    if (width <= 0 || screen_height_ <= 0) return;
-    glViewport(x, 0, width, screen_height_);
-
-    if (camera_enabled_ && camera_texture_ != 0) {
-      glUniformMatrix4fv(texture_transform_uniform_, 1, GL_FALSE,
-                         camera_texture_transform_);
-      glUniformMatrix4fv(mvp_uniform_, 1, GL_FALSE, identity_gl.data());
-      glBindTexture(GL_TEXTURE_EXTERNAL_OES, camera_texture_);
-      glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-      glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
+  glVertexAttribPointer(texcoord_attrib_,2,GL_FLOAT,GL_FALSE,0,kQuadTexCoords);
+  glActiveTexture(GL_TEXTURE0); glUniform1i(sampler_uniform_,0);
+  Matrix4x4 identity; for(int i=0;i<4;++i) identity.m[i][i]=1.f;
+  const auto identity_gl=identity.ToGlArray();
+  const Matrix4x4 window_world=(window_locked_?window_anchor_matrix_:head_world_matrix_)*model_matrix_;
+  UpdateSpatialGaze(window_world);
+  const int left_width=screen_width_/2, right_width=screen_width_-left_width;
+  const auto draw_eye=[&](CardboardEye eye,int x,int width) {
+    if(width<=0||screen_height_<=0) return;
+    glViewport(x,0,width,screen_height_);
+    if(camera_enabled_&&camera_texture_) {
+      glUniformMatrix4fv(texture_transform_uniform_,1,GL_FALSE,camera_texture_transform_);
+      glUniformMatrix4fv(mvp_uniform_,1,GL_FALSE,identity_gl.data());
+      glBindTexture(GL_TEXTURE_EXTERNAL_OES,camera_texture_);
+      glDrawArrays(GL_TRIANGLE_STRIP,0,4); glBindTexture(GL_TEXTURE_EXTERNAL_OES,0);
     }
-
-    float projection_gl[16] = {};
-    float eye_from_head_gl[16] = {};
-    CardboardLensDistortion_getProjectionMatrix(
-        lens_distortion_, eye, 0.1f, 100.0f, projection_gl);
-    CardboardLensDistortion_getEyeFromHeadMatrix(
-        lens_distortion_, eye, eye_from_head_gl);
-
-    const Matrix4x4 projection = GetMatrixFromGlArray(projection_gl);
-    const Matrix4x4 eye_from_head = GetMatrixFromGlArray(eye_from_head_gl);
-    // Match the rotational-only world pose above; Cardboard's positional
-    // estimate is intentionally excluded until true 6DoF tracking exists.
-    const Matrix4x4 head_view =
-        GetViewMatrixFromPose({0.0f, 0.0f, 0.0f}, last_head_orientation_);
-    const Matrix4x4 view_projection = projection * eye_from_head * head_view;
-
-    // Unlocked: the window follows the headset. Locked: preserve the world
-    // transform captured when the user pressed the lock button.
-    const Matrix4x4 window_world =
-        (window_locked_ ? window_anchor_matrix_ : head_world_matrix_) *
-        model_matrix_;
-    const Matrix4x4 mvp = view_projection * window_world;
-    const std::array<float, 16> mvp_gl = mvp.ToGlArray();
-
-    glUniformMatrix4fv(texture_transform_uniform_, 1, GL_FALSE,
-                       texture_transform_);
-    glUniformMatrix4fv(mvp_uniform_, 1, GL_FALSE, mvp_gl.data());
-    glBindTexture(GL_TEXTURE_EXTERNAL_OES, video_texture_);
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-    glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
+    float projection_gl[16]={}, eye_gl[16]={};
+    CardboardLensDistortion_getProjectionMatrix(lens_distortion_,eye,0.1f,100.f,projection_gl);
+    CardboardLensDistortion_getEyeFromHeadMatrix(lens_distortion_,eye,eye_gl);
+    const Matrix4x4 projection=GetMatrixFromGlArray(projection_gl);
+    const Matrix4x4 eye_from_head=GetMatrixFromGlArray(eye_gl);
+    const Matrix4x4 head_view=GetViewMatrixFromPose({0.f,0.f,0.f},last_head_orientation_);
+    const Matrix4x4 vp=projection*eye_from_head*head_view;
+    const auto mvp=(vp*window_world).ToGlArray();
+    glUniformMatrix4fv(texture_transform_uniform_,1,GL_FALSE,texture_transform_);
+    glUniformMatrix4fv(mvp_uniform_,1,GL_FALSE,mvp.data());
+    glBindTexture(GL_TEXTURE_EXTERNAL_OES,video_texture_);
+    glDrawArrays(GL_TRIANGLE_STRIP,0,4); glBindTexture(GL_TEXTURE_EXTERNAL_OES,0);
+    DrawSpatialControls(vp,window_world);
   };
-
-  draw_eye(kLeft, 0, left_eye_width);
-  draw_eye(kRight, left_eye_width, right_eye_width);
-
+  draw_eye(kLeft,0,left_width); draw_eye(kRight,left_width,right_width);
   glDisableVertexAttribArray(position_attrib_);
   glDisableVertexAttribArray(texcoord_attrib_);
-  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  glBindFramebuffer(GL_FRAMEBUFFER,0);
+}
+
+void VrMoonlightApp::UpdateSpatialGaze(const Matrix4x4& window_world) {
+  Matrix4x4 inverse;
+  if(!InvertMatrix(window_world,inverse)) { gaze_target_=-1; gaze_dwell_seconds_=0.f; gaze_action_armed_=true; return; }
+  const std::array<float,4> origin={0.f,0.f,0.f,1.f};
+  const std::array<float,4> forward={-head_world_matrix_.m[0][2],-head_world_matrix_.m[1][2],-head_world_matrix_.m[2][2],0.f};
+  const auto o=inverse*origin, d=inverse*forward;
+  constexpr float plane_z=0.035f;
+  if(std::fabs(d[2])<1e-5f) gaze_target_=-1;
+  else {
+    const float t=(plane_z-o[2])/d[2];
+    const float x=o[0]+t*d[0], y=o[1]+t*d[1];
+    const float centers[]={-0.80f,-0.40f,0.f,0.40f,0.80f};
+    gaze_target_=-1;
+    if(t>0.f) for(int i=0;i<5;++i)
+      if(std::fabs(x-centers[i])<0.145f&&std::fabs(y+1.18f)<0.105f) { gaze_target_=i; break; }
+  }
+  const int64_t now=GetBootTimeNano();
+  if(gaze_target_>=0&&last_gaze_frame_nano_!=0) {
+    const float dt=static_cast<float>(now-last_gaze_frame_nano_)/1.0e9f;
+    gaze_dwell_seconds_+=std::clamp(dt,0.f,0.05f);
+  } else if(gaze_target_<0) gaze_dwell_seconds_=0.f;
+  last_gaze_frame_nano_=now;
+  if(gaze_target_<0) gaze_action_armed_=true;
+  else if(gaze_dwell_seconds_>=kGazeDwellSeconds&&gaze_action_armed_) {
+    switch(gaze_target_) {
+      case 0: AdjustScreenDistance(-0.15f); break;
+      case 1: AdjustScreenDistance(0.15f); break;
+      case 2: AdjustScreenSize(-0.10f); break;
+      case 3: AdjustScreenSize(0.10f); break;
+      case 4:
+        if(window_locked_) { window_locked_=false; window_lock_pending_=false; }
+        else { window_anchor_matrix_=head_world_matrix_; window_locked_=true; window_lock_pending_=false; }
+        break;
+    }
+    gaze_action_armed_=false; gaze_dwell_seconds_=0.f;
+  }
+}
+
+void VrMoonlightApp::DrawSpatialControls(const Matrix4x4& vp,const Matrix4x4& window_world) {
+  if(!spatial_ui_program_) return;
+  glUseProgram(spatial_ui_program_);
+  glEnableVertexAttribArray(spatial_ui_pos_attrib_);
+  glVertexAttribPointer(spatial_ui_pos_attrib_,3,GL_FLOAT,GL_FALSE,0,kSpatialUiQuad);
+  const float centers[]={-0.80f,-0.40f,0.f,0.40f,0.80f};
+  const auto rect=[&](float x,float y,float z,float w,float h,const float* color) {
+    const Matrix4x4 local=GetTranslationMatrix({x,y,z})*GetScaleMatrix({w,h,1.f});
+    const auto mvp=(vp*window_world*local).ToGlArray();
+    glUniformMatrix4fv(spatial_ui_mvp_uniform_,1,GL_FALSE,mvp.data());
+    glUniform4fv(spatial_ui_color_uniform_,1,color);
+    glDrawArrays(GL_TRIANGLES,0,6);
+  };
+  const float panel[]={0.018f,0.024f,0.038f,0.92f};
+  const float normal[]={0.13f,0.16f,0.21f,1.f};
+  const float focus[]={0.08f,0.38f,0.72f,1.f};
+  const float white[]={0.9f,0.94f,1.f,1.f};
+  rect(0.f,-1.18f,0.025f,2.02f,0.27f,panel);
+  for(int i=0;i<5;++i) {
+    rect(centers[i],-1.18f,0.035f,0.31f,0.20f,gaze_target_==i?focus:normal);
+    if(i<2) {
+      rect(centers[i],-1.18f,0.046f,0.105f,0.012f,white);
+      if(i==1) rect(centers[i],-1.18f,0.047f,0.012f,0.105f,white);
+    } else if(i<4) {
+      rect(centers[i]-0.035f,-1.18f,0.046f,0.012f,0.085f,white);
+      rect(centers[i]+0.035f,-1.18f,0.046f,0.012f,0.085f,white);
+      rect(centers[i],-1.18f,0.046f,0.06f,0.012f,white);
+      if(i==3) rect(centers[i],-1.18f,0.047f,0.012f,0.06f,white);
+    } else {
+      rect(centers[i],-1.18f,0.046f,0.075f,0.055f,white);
+      rect(centers[i],-1.14f,0.046f,0.055f,0.025f,white);
+    }
+    if(gaze_target_==i&&gaze_action_armed_) {
+      const float progress[]={0.3f,0.9f,1.f,1.f};
+      const float amount=std::clamp(gaze_dwell_seconds_/kGazeDwellSeconds,0.f,1.f);
+      rect(centers[i]-0.145f+0.145f*amount,-1.265f,0.05f,0.29f*amount,0.012f,progress);
+    }
+  }
+  glDisableVertexAttribArray(spatial_ui_pos_attrib_);
 }
 
 void VrMoonlightApp::DestroyCardboardResources() {
