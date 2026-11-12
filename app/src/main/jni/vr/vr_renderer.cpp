@@ -414,14 +414,19 @@ float VrMoonlightApp::OnDrawFrame() {
     float orientation[4] = {0.0f, 0.0f, 0.0f, 1.0f};
     CardboardHeadTracker_getPose(head_tracker_, GetBootTimeNano(),
                                  viewport_orientation_, position, orientation);
-    last_head_position_ = {position[0], position[1], position[2]};
+    // Cardboard provides reliable 3DoF orientation, but its reported
+    // translation is not a room-tracked 6DoF position. Do not feed that
+    // value into the world anchor: noisy translation makes a locked window
+    // drift or jitter while the user turns their head.
+    last_head_position_ = {0.0f, 0.0f, 0.0f};
     last_head_orientation_ = Quatf(orientation[0], orientation[1],
                                    orientation[2], orientation[3]);
 
+    // Keep the headset pose purely rotational for this 3DoF renderer.
     head_world_matrix_ = last_head_orientation_.ToMatrix();
-    head_world_matrix_.m[0][3] = position[0];
-    head_world_matrix_.m[1][3] = position[1];
-    head_world_matrix_.m[2][3] = position[2];
+    head_world_matrix_.m[0][3] = 0.0f;
+    head_world_matrix_.m[1][3] = 0.0f;
+    head_world_matrix_.m[2][3] = 0.0f;
     head_pose_valid_ = true;
     if (window_locked_ && window_lock_pending_) {
       window_anchor_matrix_ = head_world_matrix_;
@@ -780,8 +785,10 @@ void VrMoonlightApp::RenderSpatialVideoToTexture() {
 
     const Matrix4x4 projection = GetMatrixFromGlArray(projection_gl);
     const Matrix4x4 eye_from_head = GetMatrixFromGlArray(eye_from_head_gl);
+    // Match the rotational-only world pose above; Cardboard's positional
+    // estimate is intentionally excluded until true 6DoF tracking exists.
     const Matrix4x4 head_view =
-        GetViewMatrixFromPose(last_head_position_, last_head_orientation_);
+        GetViewMatrixFromPose({0.0f, 0.0f, 0.0f}, last_head_orientation_);
     const Matrix4x4 view_projection = projection * eye_from_head * head_view;
 
     // Unlocked: the window follows the headset. Locked: preserve the world
