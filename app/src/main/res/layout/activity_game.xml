@@ -65,8 +65,6 @@
         android:clickable="false"
         android:visibility="gone" />
 
-
-
     <TextView
         android:id="@+id/vrLensLockButton"
         android:layout_width="wrap_content"
