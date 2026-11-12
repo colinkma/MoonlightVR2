@@ -6,7 +6,6 @@
 #include <GLES2/gl2ext.h>
 
 #include <algorithm>
-#include <chrono>
 #include <array>
 #include <cmath>
 #include <iterator>
@@ -905,7 +904,7 @@ void VrMoonlightApp::DrawSpatialControls(const Matrix4x4& vp,const Matrix4x4& wi
     } else if(i<4) {
       rect(centers[i]-0.035f,1.18f,0.046f,0.012f,0.085f,white);
       rect(centers[i]+0.035f,1.18f,0.046f,0.012f,0.085f,white);
-      rect(centers[i],-1.18f,0.046f,0.06f,0.012f,white);
+      rect(centers[i],1.18f,0.046f,0.06f,0.012f,white);
       if(i==3) rect(centers[i],-1.18f,0.047f,0.012f,0.06f,white);
     } else {
       rect(centers[i],-1.18f,0.046f,0.075f,0.055f,white);
