@@ -165,6 +165,12 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     private static final int LENS_SIDE_RIGHT = 2;
     private static final int CAMERA_PERMISSION_REQ = 1001;
     private VrCameraManager vrCameraManager;
+    private boolean vrSpatialWindowLocked = false;
+    private boolean vrHeadLookingDown = false;
+    private boolean vrCameraPermissionRequested = false;
+    private boolean vrCameraStartQueued = false;
+    private View vrSpatialControls;
+    private TextView vrSpatialLockButton;
     private final VrRenderer.SurfaceListener vrSurfaceListener = new VrRenderer.SurfaceListener() {
         @Override
         public void onSurfaceReady(Surface surface) {
@@ -273,9 +279,15 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             vrRenderer = new VrRenderer(this, vrSurfaceView, vrSurfaceListener);
             vrRenderer.setVideoAspectRatio(prefConfig.width, prefConfig.height);
             vrRenderer.setLensDistortionStrength(prefConfig.vrLensDistortionStrengthPercent / 100.0f);
+            vrRenderer.setHeadPitchListener(this::onVrHeadPitchChanged);
             vrSurfaceView.setEGLContextClientVersion(2);
             vrSurfaceView.setRenderer(vrRenderer);
+            vrRenderer.setDisplayMode(prefConfig.enableVrSpatialMode ? 1 : 0);
+            vrRenderer.setViewportOrientation(getWindowManager().getDefaultDisplay().getRotation());
             vrSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
+            if (prefConfig.enableVrCameraPassthrough) {
+                vrCameraManager = new VrCameraManager(this);
+            }
             initVrLensControls();
 
             startVrControlService(vrRenderer);
@@ -1155,10 +1167,8 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         }
 
         if (vrMode && vrRenderer != null) {
-            if (vrCameraManager != null) {
-                vrCameraManager.stopCamera();
-            }
-            vrRenderer.setCameraEnabled(false);
+            vrHeadLookingDown = false;
+            stopVrCameraPassthrough();
             vrRenderer.onPause();
         }
 
@@ -1171,11 +1181,21 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
         if (vrMode && vrRenderer != null) {
             vrRenderer.onResume();
+            prefConfig = PreferenceConfiguration.readPreferences(this);
             refreshLensLockPreference();
-            if (prefConfig == null) {
-                prefConfig = PreferenceConfiguration.readPreferences(this);
+            vrRenderer.setDisplayMode(prefConfig.enableVrSpatialMode ? 1 : 0);
+            vrRenderer.setViewportOrientation(getWindowManager().getDefaultDisplay().getRotation());
+            if (prefConfig.enableVrCameraPassthrough) {
+                if (vrCameraManager == null) {
+                    vrCameraManager = new VrCameraManager(this);
+                }
+            } else {
+                stopVrCameraPassthrough();
             }
-            maybeStartVrCamera();
+            if (!prefConfig.enableVrSpatialMode) {
+                vrHeadLookingDown = false;
+                stopVrCameraPassthrough();
+            }
         }
     }
 
@@ -2372,6 +2392,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         }
         if (vrLensCenterLine != null) vrLensCenterLine.setVisibility(View.VISIBLE);
         updateVrLensLockUi();
+        initVrSpatialControls();
         vrRenderer.setLensScale(lensScale);
         if (leftLensOffsetX != 0.0f) {
             vrRenderer.adjustLeftLensOffset(leftLensOffsetX);
@@ -2379,6 +2400,75 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         if (rightLensOffsetX != 0.0f) {
             vrRenderer.adjustRightLensOffset(rightLensOffsetX);
         }
+    }
+
+    private void initVrSpatialControls() {
+        vrSpatialControls = findViewById(R.id.vrSpatialControls);
+        vrSpatialLockButton = findViewById(R.id.vrSpatialLockButton);
+        TextView distanceNear = findViewById(R.id.vrSpatialDistanceNear);
+        TextView distanceFar = findViewById(R.id.vrSpatialDistanceFar);
+        TextView rotate = findViewById(R.id.vrSpatialRotateButton);
+
+        boolean enabled = prefConfig != null && prefConfig.enableVrSpatialMode;
+        if (vrSpatialControls != null) {
+            vrSpatialControls.setVisibility(enabled ? View.VISIBLE : View.GONE);
+        }
+        if (!enabled) {
+            return;
+        }
+
+        if (distanceNear != null) {
+            distanceNear.setOnClickListener(view -> vrRenderer.adjustScreenDistance(-0.1f));
+        }
+        if (distanceFar != null) {
+            distanceFar.setOnClickListener(view -> vrRenderer.adjustScreenDistance(0.1f));
+        }
+        if (rotate != null) {
+            rotate.setOnClickListener(view -> vrRenderer.adjustScreenRotation(
+                    (float) (Math.PI / 2.0)));
+        }
+        if (vrSpatialLockButton != null) {
+            vrSpatialLockButton.setOnClickListener(view -> {
+                vrSpatialWindowLocked = !vrSpatialWindowLocked;
+                vrRenderer.setWindowLocked(vrSpatialWindowLocked);
+                updateVrSpatialLockUi();
+            });
+        }
+        updateVrSpatialLockUi();
+    }
+
+    private void updateVrSpatialLockUi() {
+        if (vrSpatialLockButton != null) {
+            vrSpatialLockButton.setText(getString(vrSpatialWindowLocked
+                    ? R.string.vr_spatial_unlock : R.string.vr_spatial_lock));
+        }
+    }
+
+    private void onVrHeadPitchChanged(final boolean lookingDown) {
+        runOnUiThread(() -> {
+            vrHeadLookingDown = lookingDown;
+            if (prefConfig == null || !prefConfig.enableVrSpatialMode
+                    || !prefConfig.enableVrCameraPassthrough) {
+                stopVrCameraPassthrough();
+                return;
+            }
+
+            if (lookingDown) {
+                maybeStartVrCamera();
+            } else {
+                stopVrCameraPassthrough();
+            }
+        });
+    }
+
+    private void stopVrCameraPassthrough() {
+        if (vrCameraManager != null) {
+            vrCameraManager.stopCamera();
+        }
+        if (vrRenderer != null) {
+            vrRenderer.setCameraEnabled(false);
+        }
+        vrCameraStartQueued = false;
     }
 
     private boolean handleVrLensTouch(MotionEvent event) {
@@ -3044,36 +3134,41 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     }
 
     private void initVrCamera() {
-        if (vrSurfaceView == null || vrRenderer == null || vrCameraManager == null) {
+        if (vrSurfaceView == null || vrRenderer == null || vrCameraManager == null
+                || vrCameraStartQueued) {
             return;
         }
-        vrSurfaceView.queueEvent(new Runnable() {
-            @Override
-            public void run() {
+        vrCameraStartQueued = true;
+        vrSurfaceView.queueEvent(() -> {
+            try {
                 Surface cameraSurface = vrRenderer.createCameraSurface();
                 vrCameraManager.startCamera(cameraSurface);
                 vrRenderer.setCameraEnabled(true);
+            } finally {
+                runOnUiThread(() -> vrCameraStartQueued = false);
             }
         });
     }
 
     private void maybeStartVrCamera() {
-        if (!vrMode || vrRenderer == null || vrCameraManager == null || vrRenderSurface == null) {
+        if (!vrMode || vrRenderer == null || vrRenderSurface == null
+                || !vrHeadLookingDown || prefConfig == null
+                || !prefConfig.enableVrSpatialMode
+                || !prefConfig.enableVrCameraPassthrough) {
             return;
         }
-        if (prefConfig != null && !prefConfig.enableVrCameraPip) {
-            if (vrCameraManager.isStarted()) {
-                vrCameraManager.stopCamera();
-                vrRenderer.setCameraEnabled(false);
-            }
-            return;
+        if (vrCameraManager == null) {
+            vrCameraManager = new VrCameraManager(this);
         }
-        if (vrCameraManager.isStarted()) {
+        if (vrCameraManager.isStarted() || vrCameraStartQueued) {
             return;
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
                 checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION_REQ);
+            if (!vrCameraPermissionRequested) {
+                vrCameraPermissionRequested = true;
+                requestPermissions(new String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION_REQ);
+            }
             return;
         }
         initVrCamera();
@@ -3083,10 +3178,13 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == CAMERA_PERMISSION_REQ) {
+            vrCameraPermissionRequested = false;
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 maybeStartVrCamera();
             } else {
                 LimeLog.warning("Camera permission denied");
+                vrHeadLookingDown = false;
+                stopVrCameraPassthrough();
             }
         }
     }
