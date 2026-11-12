@@ -918,15 +918,15 @@ void VrMoonlightApp::DrawSpatialControls(const Matrix4x4& vp) {
   for(int i=0;i<5;++i) {
     rect(centers[i],0.f,0.035f,0.31f,0.20f,gaze_target_==i?focus:normal);
     if(i<2) {
-      rect(centers[i],1.18f,0.046f,0.105f,0.012f,white);
-      if(i==1) rect(centers[i],1.18f,0.047f,0.012f,0.105f,white);
+      rect(centers[i],0.f,0.046f,0.105f,0.012f,white);
+      if(i==1) rect(centers[i],0.f,0.047f,0.012f,0.105f,white);
     } else if(i<4) {
       rect(centers[i]-0.035f,0.f,0.046f,0.012f,0.085f,white);
       rect(centers[i]+0.035f,0.f,0.046f,0.012f,0.085f,white);
-      rect(centers[i],1.18f,0.046f,0.06f,0.012f,white);
-      if(i==3) rect(centers[i],1.18f,0.047f,0.012f,0.06f,white);
+      rect(centers[i],0.f,0.046f,0.06f,0.012f,white);
+      if(i==3) rect(centers[i],0.f,0.047f,0.012f,0.06f,white);
     } else {
-      rect(centers[i],-1.18f,0.046f,0.075f,0.055f,white);
+      rect(centers[i],0.f,0.046f,0.075f,0.055f,white);
       rect(centers[i],0.04f,0.046f,0.055f,0.025f,white);
     }
     if(gaze_target_==i&&gaze_action_armed_) {
