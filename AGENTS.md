@@ -18,6 +18,16 @@ This fork of the Moonlight Android client (**MoonlightVR**) adds native support 
   - `checkbox_enable_vr_camera_pip` - Toggle rear camera picture-in-picture view in VR (off by default).
 - **Native build:** Custom NDK module `vr_renderer` compiles Cardboard SDK sources (via `vendor/cardboard`) alongside the existing `moonlight-core` libs, linking against `libc++_shared` and `atomic`.
 
+## MoonlightVR2 Spatial Window Mode
+
+- Keep the original fixed SBS mode as the default. It must continue to render the complete 2D stream in both eyes without head tracking.
+- The optional `checkbox_enable_vr_spatial_mode` setting enables Cardboard head tracking and a world-anchored stream window. The JNI `nativeOnDrawFrame` method returns the tracked head pitch to Java.
+- The spatial window controls are overlaid in `activity_game.xml`: adjust distance, lock/unlock the world position, and rotate the window in 90-degree steps.
+- Locking captures the current head pose; if the first pose has not arrived yet, defer the anchor capture until a valid pose is available.
+- The optional `checkbox_enable_vr_camera_passthrough` setting starts the rear camera only when head pitch reaches the down-look threshold (35 degrees), and stops it when pitch rises below the 25-degree hysteresis threshold. The camera is used as the background behind the stream window and must stop on Activity pause.
+- Keep camera permission optional in the manifest. Do not start the camera when either the spatial mode or camera passthrough setting is disabled.
+- Keep all native renderer state changes on the GLSurfaceView GL thread.
+
 ## Project Structure Notes
 - `app/` contains the Android client. VR-specific Java changes sit in `app/src/main/java/com/limelight/vr/`. UI adjustments (like the distance slider) are located in `app/src/main/res/xml/preferences.xml` and `strings.xml`.
 - `app/src/main/jni/` houses the JNI build. The `vr/` directory holds the native VR renderer (`vr_renderer.cpp/h`) and JNI bindings (`vr_renderer_jni.cc`). This is where the MVP matrix calculations, screen distance clamping (`SetScreenDistance`), and `UpdateModelMatrix` logic reside.
