@@ -287,6 +287,15 @@
     <string name="category_vr_settings">VR 模式</string>
     <string name="title_checkbox_enable_vr">启用 VR 模式</string>
     <string name="summary_checkbox_enable_vr">使用 Cardboard VR 眼镜进行双眼分屏显示</string>
+    <string name="title_checkbox_enable_vr_spatial_mode">固定空间屏幕模式</string>
+    <string name="summary_checkbox_enable_vr_spatial_mode">将串流窗口固定在三维空间中，可调整远近、锁定位置并旋转窗口。</string>
+    <string name="title_checkbox_enable_vr_camera_passthrough">低头时启用摄像头透明模式</string>
+    <string name="summary_checkbox_enable_vr_camera_passthrough">低头时自动开启后置摄像头，将真实环境显示为背景；抬头后自动关闭。</string>
+    <string name="vr_spatial_distance_near">拉近 −</string>
+    <string name="vr_spatial_distance_far">推远 +</string>
+    <string name="vr_spatial_rotate">旋转 90°</string>
+    <string name="vr_spatial_lock">锁定位置</string>
+    <string name="vr_spatial_unlock">解锁位置</string>
     <string name="title_checkbox_enable_skybox">启用 VR 天空盒</string>
     <string name="summary_checkbox_enable_skybox">在 VR 模式下显示背景环境（当前固定分屏模式不使用此功能）</string>
     <string name="title_checkbox_quick_zoom">快速缩放</string>
