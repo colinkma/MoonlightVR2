@@ -1,0 +1,140 @@
+apply plugin: 'com.android.application'
+
+android {
+    ndkVersion "27.0.12077973"
+
+    compileSdk 34
+
+    namespace 'com.limelight'
+
+    defaultConfig {
+        minSdk 26
+        targetSdk 34
+
+        versionName "2026.4.1"
+        versionCode = 314
+
+        // Generate native debug symbols to allow Google Play to symbolicate our native crashes
+        ndk.debugSymbolLevel = 'FULL'
+        ndk {
+            abiFilters 'arm64-v8a'
+        }
+    }
+    
+    if (project.hasProperty('includeX64')) {
+        android.productFlavors.all { flavor ->
+            flavor.ndk.abiFilters 'arm64-v8a', 'x86_64'
+        }
+    }
+
+    flavorDimensions.add("root")
+
+    buildFeatures {
+        buildConfig = true
+    }
+
+    productFlavors {
+        vrMode {
+            externalNativeBuild {
+                ndkBuild {
+                    arguments "PRODUCT_FLAVOR=vrMode"
+                }
+            }
+
+            applicationId "pl.florke.moonlightvr"
+            dimension "root"
+            buildConfigField "boolean", "ROOT_BUILD", "false"
+        }
+    }
+
+    compileOptions {
+        encoding "UTF-8"
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+
+    lint {
+        disable 'MissingTranslation'
+        lintConfig file('lint.xml')
+    }
+
+    bundle {
+        language {
+            // Avoid splitting by language, since we allow users
+            // to manually switch language in settings.
+            enableSplit = false
+        }
+        density {
+            // FIXME: This should not be necessary but we get
+            // weird crashes due to missing drawable resources
+            // when this split is enabled.
+            enableSplit = false
+        }
+    }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix ".debug"
+            resValue "string", "app_label", "MoonlightVR"
+
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+        release {
+            resValue "string", "app_label", "MoonlightVR"
+
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    signingConfigs {
+        ciSigning {
+            def ciStoreFilePath = project.findProperty('MOONLIGHTVR_STORE_FILE')?.toString()?.trim()
+            def ciStorePassword = project.findProperty('MOONLIGHTVR_STORE_PASSWORD')?.toString()?.trim()
+            def ciKeyAlias = project.findProperty('MOONLIGHTVR_KEY_ALIAS')?.toString()?.trim()
+            def ciKeyPassword = project.findProperty('MOONLIGHTVR_KEY_PASSWORD')?.toString()?.trim()
+            def ciStoreFileObject = ciStoreFilePath ? file(ciStoreFilePath) : null
+
+            def hasAllSigningProps = ciStoreFileObject?.exists() &&
+                                    ciStorePassword &&
+                                    ciKeyAlias &&
+                                    ciKeyPassword
+
+            if (hasAllSigningProps) {
+                storeFile ciStoreFileObject
+                storePassword ciStorePassword
+                keyAlias ciKeyAlias
+                keyPassword ciKeyPassword
+            }
+        }
+    }
+
+    if (android.signingConfigs.ciSigning.storeFile != null) {
+        buildTypes.debug.signingConfig android.signingConfigs.ciSigning
+        buildTypes.release.signingConfig android.signingConfigs.ciSigning
+    }
+
+    externalNativeBuild {
+        ndkBuild {
+            path "src/main/jni/Android.mk"
+        }
+    }
+ packaging {
+        resources {
+            excludes += '/META-INF/versions/**'
+        }
+    }
+}
+
+dependencies {
+    implementation 'org.nanohttpd:nanohttpd:2.3.1'
+    implementation 'org.bouncycastle:bcprov-jdk18on:1.78.1'
+    implementation 'org.bouncycastle:bcpkix-jdk18on:1.78.1'
+    implementation 'org.jcodec:jcodec:0.2.5'
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    implementation 'org.jmdns:jmdns:3.5.9'
+    implementation 'com.github.cgutman:ShieldControllerExtensions:1.0.1'
+    // Explicitly include the Cardboard SDK so its Java classes ship in the APK
+    implementation project(':cardboard-sdk')
+}
