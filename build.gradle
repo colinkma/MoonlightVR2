@@ -1,0 +1,28 @@
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+buildscript {
+    repositories {
+        mavenCentral()
+        google()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.13.2'
+        classpath 'com.google.protobuf:protobuf-gradle-plugin:0.9.4'
+    }
+}
+
+allprojects {
+    repositories {
+        mavenCentral()
+        google()
+        maven { url 'https://jitpack.io' }
+    }
+}
+
+project(':cardboard-sdk') {
+    afterEvaluate { sdk ->
+        def protoDir = new File(sdk.projectDir.parentFile, 'proto')
+        if (protoDir.exists()) {
+            sdk.android.sourceSets.main.proto.srcDirs = [protoDir]
+        }
+    }
+}
