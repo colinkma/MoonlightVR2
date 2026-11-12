@@ -809,6 +809,7 @@ void VrMoonlightApp::RenderSpatialVideoToTexture() {
   const auto draw_eye=[&](CardboardEye eye,int x,int width) {
     if(width<=0||screen_height_<=0) return;
     glViewport(x,0,width,screen_height_);
+    glUseProgram(video_program_);
     if(camera_enabled_&&camera_texture_) {
       glUniformMatrix4fv(texture_transform_uniform_,1,GL_FALSE,camera_texture_transform_);
       glUniformMatrix4fv(mvp_uniform_,1,GL_FALSE,identity_gl.data());
@@ -849,9 +850,13 @@ void VrMoonlightApp::UpdateSpatialGaze(const Matrix4x4& window_world) {
     const float centers[]={-0.80f,-0.40f,0.f,0.40f,0.80f};
     gaze_target_=-1;
     if(t>0.f) for(int i=0;i<5;++i)
-      if(std::fabs(x-centers[i])<0.145f&&std::fabs(y+1.18f)<0.105f) { gaze_target_=i; break; }
+      if(std::fabs(x-centers[i])<0.145f&&std::fabs(y-1.18f)<0.105f) { gaze_target_=i; break; }
   }
   const int64_t now=GetBootTimeNano();
+  if (gaze_target_ != previous_gaze_target_) {
+    gaze_dwell_seconds_ = 0.0f;
+    previous_gaze_target_ = gaze_target_;
+  }
   if(gaze_target_>=0&&last_gaze_frame_nano_!=0) {
     const float dt=static_cast<float>(now-last_gaze_frame_nano_)/1.0e9f;
     gaze_dwell_seconds_+=std::clamp(dt,0.f,0.05f);
@@ -890,27 +895,42 @@ void VrMoonlightApp::DrawSpatialControls(const Matrix4x4& vp,const Matrix4x4& wi
   const float normal[]={0.13f,0.16f,0.21f,1.f};
   const float focus[]={0.08f,0.38f,0.72f,1.f};
   const float white[]={0.9f,0.94f,1.f,1.f};
-  rect(0.f,-1.18f,0.025f,2.02f,0.27f,panel);
+  rect(0.f,1.18f,0.025f,2.02f,0.27f,panel);
   for(int i=0;i<5;++i) {
-    rect(centers[i],-1.18f,0.035f,0.31f,0.20f,gaze_target_==i?focus:normal);
+    rect(centers[i],1.18f,0.035f,0.31f,0.20f,gaze_target_==i?focus:normal);
     if(i<2) {
       rect(centers[i],-1.18f,0.046f,0.105f,0.012f,white);
       if(i==1) rect(centers[i],-1.18f,0.047f,0.012f,0.105f,white);
     } else if(i<4) {
-      rect(centers[i]-0.035f,-1.18f,0.046f,0.012f,0.085f,white);
-      rect(centers[i]+0.035f,-1.18f,0.046f,0.012f,0.085f,white);
+      rect(centers[i]-0.035f,1.18f,0.046f,0.012f,0.085f,white);
+      rect(centers[i]+0.035f,1.18f,0.046f,0.012f,0.085f,white);
       rect(centers[i],-1.18f,0.046f,0.06f,0.012f,white);
       if(i==3) rect(centers[i],-1.18f,0.047f,0.012f,0.06f,white);
     } else {
       rect(centers[i],-1.18f,0.046f,0.075f,0.055f,white);
-      rect(centers[i],-1.14f,0.046f,0.055f,0.025f,white);
+      rect(centers[i],1.14f,0.046f,0.055f,0.025f,white);
     }
     if(gaze_target_==i&&gaze_action_armed_) {
       const float progress[]={0.3f,0.9f,1.f,1.f};
       const float amount=std::clamp(gaze_dwell_seconds_/kGazeDwellSeconds,0.f,1.f);
-      rect(centers[i]-0.145f+0.145f*amount,-1.265f,0.05f,0.29f*amount,0.012f,progress);
+      rect(centers[i]-0.145f+0.145f*amount,1.265f,0.05f,0.29f*amount,0.012f,progress);
     }
   }
+
+  // Head-locked reticle marks the centre of the simulated gaze ray.
+  const float reticle_color[] = {0.92f, 0.96f, 1.0f, 0.95f};
+  const Matrix4x4 reticle_pose = GetTranslationMatrix({0.0f, 0.0f, -1.35f});
+  const Matrix4x4 reticle_h = GetScaleMatrix({0.018f, 0.002f, 1.0f});
+  const auto reticle_h_mvp =
+      (vp * head_world_matrix_ * reticle_pose * reticle_h).ToGlArray();
+  glUniformMatrix4fv(spatial_ui_mvp_uniform_, 1, GL_FALSE, reticle_h_mvp.data());
+  glUniform4fv(spatial_ui_color_uniform_, 1, reticle_color);
+  glDrawArrays(GL_TRIANGLES, 0, 6);
+  const Matrix4x4 reticle_v = GetScaleMatrix({0.002f, 0.018f, 1.0f});
+  const auto reticle_v_mvp =
+      (vp * head_world_matrix_ * reticle_pose * reticle_v).ToGlArray();
+  glUniformMatrix4fv(spatial_ui_mvp_uniform_, 1, GL_FALSE, reticle_v_mvp.data());
+  glDrawArrays(GL_TRIANGLES, 0, 6);
   glDisableVertexAttribArray(spatial_ui_pos_attrib_);
 }
 
