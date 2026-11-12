@@ -169,6 +169,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     private boolean vrHeadLookingDown = false;
     private boolean vrCameraPermissionRequested = false;
     private boolean vrCameraStartQueued = false;
+    private float vrSpatialScreenDistanceMeters = 2.0f;
     private View vrSpatialControls;
     private TextView vrSpatialLockButton;
     private final VrRenderer.SurfaceListener vrSurfaceListener = new VrRenderer.SurfaceListener() {
@@ -280,8 +281,11 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             vrRenderer.setVideoAspectRatio(prefConfig.width, prefConfig.height);
             vrRenderer.setLensDistortionStrength(prefConfig.vrLensDistortionStrengthPercent / 100.0f);
             vrRenderer.setHeadPitchListener(this::onVrHeadPitchChanged);
+            vrSpatialScreenDistanceMeters = prefConfig.vrScreenDistanceMeters;
             vrSurfaceView.setEGLContextClientVersion(2);
             vrSurfaceView.setRenderer(vrRenderer);
+            vrRenderer.setScreenDistance(vrSpatialScreenDistanceMeters);
+            vrRenderer.setScreenSize(prefConfig.vrScreenSizeMultiplier);
             vrRenderer.setDisplayMode(prefConfig.enableVrSpatialMode ? 1 : 0);
             vrRenderer.setViewportOrientation(getWindowManager().getDefaultDisplay().getRotation());
             vrSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
@@ -2418,10 +2422,10 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         }
 
         if (distanceNear != null) {
-            distanceNear.setOnClickListener(view -> vrRenderer.adjustScreenDistance(-0.1f));
+            distanceNear.setOnClickListener(view -> adjustVrSpatialScreenDistance(-0.1f));
         }
         if (distanceFar != null) {
-            distanceFar.setOnClickListener(view -> vrRenderer.adjustScreenDistance(0.1f));
+            distanceFar.setOnClickListener(view -> adjustVrSpatialScreenDistance(0.1f));
         }
         if (rotate != null) {
             rotate.setOnClickListener(view -> vrRenderer.adjustScreenRotation(
@@ -2441,6 +2445,22 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         if (vrSpatialLockButton != null) {
             vrSpatialLockButton.setText(getString(vrSpatialWindowLocked
                     ? R.string.vr_spatial_unlock : R.string.vr_spatial_lock));
+        }
+    }
+
+    private void adjustVrSpatialScreenDistance(float deltaMeters) {
+        if (vrRenderer == null) {
+            return;
+        }
+        vrSpatialScreenDistanceMeters = Math.max(1.0f,
+                Math.min(4.0f, vrSpatialScreenDistanceMeters + deltaMeters));
+        vrRenderer.setScreenDistance(vrSpatialScreenDistanceMeters);
+        PreferenceManager.getDefaultSharedPreferences(this).edit()
+                .putInt(PreferenceConfiguration.VR_SCREEN_DISTANCE_PREF_STRING,
+                        Math.round(vrSpatialScreenDistanceMeters * 10.0f))
+                .apply();
+        if (prefConfig != null) {
+            prefConfig.vrScreenDistanceMeters = vrSpatialScreenDistanceMeters;
         }
     }
 
