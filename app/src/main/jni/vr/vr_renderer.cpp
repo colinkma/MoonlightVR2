@@ -855,6 +855,7 @@ void VrMoonlightApp::UpdateSpatialGaze(const Matrix4x4& window_world) {
   const int64_t now=GetBootTimeNano();
   if (gaze_target_ != previous_gaze_target_) {
     gaze_dwell_seconds_ = 0.0f;
+    gaze_action_armed_ = true;
     previous_gaze_target_ = gaze_target_;
   }
   if(gaze_target_>=0&&last_gaze_frame_nano_!=0) {
@@ -899,7 +900,7 @@ void VrMoonlightApp::DrawSpatialControls(const Matrix4x4& vp,const Matrix4x4& wi
   for(int i=0;i<5;++i) {
     rect(centers[i],1.18f,0.035f,0.31f,0.20f,gaze_target_==i?focus:normal);
     if(i<2) {
-      rect(centers[i],-1.18f,0.046f,0.105f,0.012f,white);
+      rect(centers[i],1.18f,0.046f,0.105f,0.012f,white);
       if(i==1) rect(centers[i],-1.18f,0.047f,0.012f,0.105f,white);
     } else if(i<4) {
       rect(centers[i]-0.035f,1.18f,0.046f,0.012f,0.085f,white);
