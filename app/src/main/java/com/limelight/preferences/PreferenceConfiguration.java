@@ -70,7 +70,7 @@ public class PreferenceConfiguration {
     private static final String GAMEPAD_MOTION_FALLBACK_PREF_STRING = "checkbox_gamepad_motion_fallback";
     static final String ENABLE_VR_PREF_STRING = "checkbox_enable_vr";
     private static final String ENABLE_SKYBOX_PREF_STRING = "checkbox_enable_skybox";
-    private static final String VR_SCREEN_DISTANCE_PREF_STRING = "seekbar_vr_screen_distance";
+    public static final String VR_SCREEN_DISTANCE_PREF_STRING = "seekbar_vr_screen_distance";
     private static final String VR_SCREEN_SIZE_PREF_STRING = "seekbar_vr_screen_size";
     private static final String VR_CURVATURE_MODE_PREF_STRING = "list_vr_curvature_mode";
     private static final String VR_CURVATURE_AMOUNT_PREF_STRING = "seekbar_vr_curvature_amount";
