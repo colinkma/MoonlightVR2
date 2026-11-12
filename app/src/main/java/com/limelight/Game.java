@@ -170,8 +170,6 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     private boolean vrCameraPermissionRequested = false;
     private boolean vrCameraStartQueued = false;
     private float vrSpatialScreenDistanceMeters = 2.0f;
-    private View vrSpatialControls;
-    private TextView vrSpatialLockButton;
     private final VrRenderer.SurfaceListener vrSurfaceListener = new VrRenderer.SurfaceListener() {
         @Override
         public void onSurfaceReady(Surface surface) {
@@ -2396,71 +2394,12 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         }
         if (vrLensCenterLine != null) vrLensCenterLine.setVisibility(View.VISIBLE);
         updateVrLensLockUi();
-        initVrSpatialControls();
         vrRenderer.setLensScale(lensScale);
         if (leftLensOffsetX != 0.0f) {
             vrRenderer.adjustLeftLensOffset(leftLensOffsetX);
         }
         if (rightLensOffsetX != 0.0f) {
             vrRenderer.adjustRightLensOffset(rightLensOffsetX);
-        }
-    }
-
-    private void initVrSpatialControls() {
-        vrSpatialControls = findViewById(R.id.vrSpatialControls);
-        vrSpatialLockButton = findViewById(R.id.vrSpatialLockButton);
-        TextView distanceNear = findViewById(R.id.vrSpatialDistanceNear);
-        TextView distanceFar = findViewById(R.id.vrSpatialDistanceFar);
-        TextView rotate = findViewById(R.id.vrSpatialRotateButton);
-
-        boolean enabled = prefConfig != null && prefConfig.enableVrSpatialMode;
-        if (vrSpatialControls != null) {
-            vrSpatialControls.setVisibility(enabled ? View.VISIBLE : View.GONE);
-        }
-        if (!enabled) {
-            return;
-        }
-
-        if (distanceNear != null) {
-            distanceNear.setOnClickListener(view -> adjustVrSpatialScreenDistance(-0.1f));
-        }
-        if (distanceFar != null) {
-            distanceFar.setOnClickListener(view -> adjustVrSpatialScreenDistance(0.1f));
-        }
-        if (rotate != null) {
-            rotate.setOnClickListener(view -> vrRenderer.adjustScreenRotation(
-                    (float) (Math.PI / 2.0)));
-        }
-        if (vrSpatialLockButton != null) {
-            vrSpatialLockButton.setOnClickListener(view -> {
-                vrSpatialWindowLocked = !vrSpatialWindowLocked;
-                vrRenderer.setWindowLocked(vrSpatialWindowLocked);
-                updateVrSpatialLockUi();
-            });
-        }
-        updateVrSpatialLockUi();
-    }
-
-    private void updateVrSpatialLockUi() {
-        if (vrSpatialLockButton != null) {
-            vrSpatialLockButton.setText(getString(vrSpatialWindowLocked
-                    ? R.string.vr_spatial_unlock : R.string.vr_spatial_lock));
-        }
-    }
-
-    private void adjustVrSpatialScreenDistance(float deltaMeters) {
-        if (vrRenderer == null) {
-            return;
-        }
-        vrSpatialScreenDistanceMeters = Math.max(1.0f,
-                Math.min(4.0f, vrSpatialScreenDistanceMeters + deltaMeters));
-        vrRenderer.setScreenDistance(vrSpatialScreenDistanceMeters);
-        PreferenceManager.getDefaultSharedPreferences(this).edit()
-                .putInt(PreferenceConfiguration.VR_SCREEN_DISTANCE_PREF_STRING,
-                        Math.round(vrSpatialScreenDistanceMeters * 10.0f))
-                .apply();
-        if (prefConfig != null) {
-            prefConfig.vrScreenDistanceMeters = vrSpatialScreenDistanceMeters;
         }
     }
 
