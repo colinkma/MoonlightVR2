@@ -114,7 +114,7 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     }
 
     public void setCameraEnabled(boolean enabled) {
-        nativeSetCameraEnabled(nativeHandle, enabled);
+        glSurfaceView.queueEvent(() -> nativeSetCameraEnabled(nativeHandle, enabled));
     }
 
     public void updateCameraTextureTransform(float[] transform) {
@@ -222,6 +222,13 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
 
     public void onPause() {
         LimeLog.info("VrRenderer.onPause");
+        if (lookingDownForCamera) {
+            lookingDownForCamera = false;
+            HeadPitchListener listener = headPitchListener;
+            if (listener != null) {
+                listener.onHeadPitchChanged(false);
+            }
+        }
         nativeOnPause(nativeHandle);
         glSurfaceView.onPause();
     }
