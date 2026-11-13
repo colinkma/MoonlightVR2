@@ -509,14 +509,13 @@ float VrMoonlightApp::OnDrawFrame() {
           window_locked_ ? 1 : 0, window_lock_pending_ ? 1 : 0);
     }
 
-    // Cardboard's quaternion is the head-view rotation (world-to-head).
-    // The floating screen anchor needs the inverse, head-to-world rotation.
-    // Keep these two transforms paired so returning to the same pose returns
-    // the window to exactly the same world position.
-    const Quatf camera_to_world(
-        -last_head_orientation_.x, -last_head_orientation_.y,
-        -last_head_orientation_.z, last_head_orientation_.w);
-    head_world_matrix_ = camera_to_world.ToMatrix();
+    // CardboardHeadTracker_getPose() returns the device/head orientation
+    // in world coordinates (head-to-world). ToMatrix() builds that rotation.
+    // GetViewMatrixFromPose() performs the inverse for rendering. Do NOT invert
+    // the quaternion here as well: doing so makes view and model rotations point
+    // in the same direction, doubling head motion and making the world-locked
+    // screen appear to orbit/drift when the user pitches or rolls the phone.
+    head_world_matrix_ = last_head_orientation_.ToMatrix();
     head_world_matrix_.m[0][3] = 0.0f;
     head_world_matrix_.m[1][3] = 0.0f;
     head_world_matrix_.m[2][3] = 0.0f;
