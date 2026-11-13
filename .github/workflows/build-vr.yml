@@ -38,7 +38,7 @@ jobs:
         run: |
           VERSION_NAME=$(grep -oP 'versionName\s+"\K[0-9.]+' app/build.gradle)
           BUILD_DATE=$(TZ=Asia/Shanghai date +%Y-%m-%d)
-          BUILD_LABEL="${BUILD_DATE}-${GITHUB_RUN_NUMBER}"
+          BUILD_LABEL="${VERSION_NAME}"
           echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_OUTPUT
           echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_OUTPUT
           echo "BUILD_LABEL=$BUILD_LABEL" >> $GITHUB_OUTPUT
@@ -87,7 +87,7 @@ jobs:
           APK_PATH="app/build/outputs/apk/vrMode/${BUILD_TYPE,,}/app-vrMode-${BUILD_TYPE,,}.apk"
           
           if [ -f "$APK_PATH" ]; then
-            NEW_NAME="MoonlightVR-VrMode-${BUILD_LABEL}.apk"
+            NEW_NAME="MoonlightVR ${BUILD_LABEL}.apk"
             cp "$APK_PATH" "$NEW_NAME"
             echo "APK_NAME=$NEW_NAME" >> $GITHUB_ENV
             echo "APK exists at: $APK_PATH"
@@ -102,8 +102,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "vrmode-${BUILD_LABEL}" "$APK_NAME" \
-            --title "MoonlightVR VR 空间定位修正版 ${BUILD_LABEL}" \
-            --notes "Signed Android release APK. Includes Cardboard pose-axis correction, viewport synchronization, and camera startup cancellation fixes. Download the APK directly." \
+            --title "MoonlightVR ${BUILD_LABEL}" \
+            --notes "Signed Android release APK. App version: ${BUILD_LABEL}. Download the APK directly." \
             --prerelease
 
       - name: Summary
