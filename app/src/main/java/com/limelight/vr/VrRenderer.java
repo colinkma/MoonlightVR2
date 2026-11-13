@@ -117,6 +117,10 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
         glSurfaceView.queueEvent(() -> nativeSetCameraEnabled(nativeHandle, enabled));
     }
 
+    public void setSpatialControlsAutoHide(boolean enabled) {
+        glSurfaceView.queueEvent(() -> nativeSetSpatialControlsAutoHide(nativeHandle, enabled));
+    }
+
     public void updateCameraTextureTransform(float[] transform) {
         if (transform != null) {
             System.arraycopy(transform, 0, cameraTextureTransform, 0, 16);
@@ -191,8 +195,8 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
         }
         float headPitchDegrees = nativeOnDrawFrame(nativeHandle);
         boolean shouldLookDown = lookingDownForCamera
-                ? headPitchDegrees >= CAMERA_EXIT_PITCH_DEGREES
-                : headPitchDegrees >= CAMERA_ENTER_PITCH_DEGREES;
+                ? headPitchDegrees <= -CAMERA_EXIT_PITCH_DEGREES
+                : headPitchDegrees <= -CAMERA_ENTER_PITCH_DEGREES;
         if (shouldLookDown != lookingDownForCamera) {
             lookingDownForCamera = shouldLookDown;
             HeadPitchListener listener = headPitchListener;
@@ -563,6 +567,7 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     private native void nativeSetCameraTexture(long handle, int textureId);
     private native void nativeSetCameraTextureTransform(long handle, float[] transform);
     private native void nativeSetCameraEnabled(long handle, boolean enabled);
+    private native void nativeSetSpatialControlsAutoHide(long handle, boolean enabled);
     private native float nativeGetCurvatureAmount(long handle);
     private native float nativeGetHorizontalCurvature(long handle);
     private native float nativeGetVerticalCurvature(long handle);
