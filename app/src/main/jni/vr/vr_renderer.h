@@ -33,6 +33,8 @@ class VrMoonlightApp {
   void SetScreenDistance(float meters);
   void SetDisplayMode(int mode);
   void SetViewportOrientation(int androidRotation);
+  void SetMagneticHeading(float headingRadians, float headingAccuracyRadians,
+                          int sensorAccuracy);
   void SetWindowLocked(bool locked);
   void SetScreenSize(float sizeMultiplier);
   void AdjustScreenDistance(float deltaMeters);
@@ -104,6 +106,18 @@ class VrMoonlightApp {
   int64_t last_recenter_frame_nano_ = 0;
   bool recenter_action_armed_ = true;
   bool head_pose_valid_ = false;
+  // Optional geomagnetic heading reference. When Android's rotation-vector
+  // sensor is reliable, it slowly corrects the yaw component that gravity
+  // cannot observe in Cardboard's 3DoF gyro/accelerometer tracker.
+  float magnetic_heading_radians_ = 0.0f;
+  float magnetic_heading_accuracy_radians_ = 1000.0f;
+  int magnetic_heading_sensor_accuracy_ = 0;
+  int64_t magnetic_heading_timestamp_nano_ = 0;
+  bool magnetic_yaw_reference_valid_ = false;
+  float magnetic_heading_reference_radians_ = 0.0f;
+  float cardboard_yaw_reference_radians_ = 0.0f;
+  float magnetic_yaw_correction_radians_ = 0.0f;
+  int64_t last_magnetic_yaw_update_nano_ = 0;
   std::array<float, 3> last_head_position_ = {0.0f, 0.0f, 0.0f};
   Quatf last_head_orientation_ = Quatf(0.0f, 0.0f, 0.0f, 1.0f);
   // Camera look-down activation is measured relative to the pose when VR mode
