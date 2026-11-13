@@ -10,14 +10,14 @@
             android:summary="@string/summary_resolution_list"
             android:entries="@array/resolution_names"
             android:entryValues="@array/resolution_values"
-            android:defaultValue="1280x720" />
+            android:defaultValue="1920x1080" />
         <ListPreference
             android:key="list_fps"
             android:title="@string/title_fps_list"
             android:summary="@string/summary_fps_list"
             android:entries="@array/fps_names"
             android:entryValues="@array/fps_values"
-            android:defaultValue="60" />
+            android:defaultValue="120" />
         <com.limelight.preferences.SeekBarPreference
             android:key="seekbar_bitrate_kbps"
             android:dialogMessage="@string/summary_seekbar_bitrate"
@@ -53,6 +53,12 @@
             android:title="@string/title_checkbox_enable_vr_spatial_mode"
             android:summary="@string/summary_checkbox_enable_vr_spatial_mode"
             android:defaultValue="false" />
+        <CheckBoxPreference
+            android:key="checkbox_vr_controls_auto_hide"
+            android:dependency="checkbox_enable_vr_spatial_mode"
+            android:title="@string/title_vr_controls_auto_hide"
+            android:summary="@string/summary_vr_controls_auto_hide"
+            android:defaultValue="true" />
         <CheckBoxPreference
             android:key="checkbox_enable_vr_camera_passthrough"
             android:dependency="checkbox_enable_vr_spatial_mode"
