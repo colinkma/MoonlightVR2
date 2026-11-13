@@ -111,6 +111,9 @@ class VrMoonlightApp {
   Quatf head_pitch_reference_orientation_ = Quatf(0.0f, 0.0f, 0.0f, 1.0f);
   bool head_pitch_reference_valid_ = false;
   Matrix4x4 head_world_matrix_;
+  Matrix4x4 previous_reticle_head_matrix_;
+  bool reticle_head_pose_valid_ = false;
+  int64_t reticle_last_motion_nano_ = 0;
   Matrix4x4 window_anchor_matrix_;
   Matrix4x4 toolbar_anchor_matrix_;
   bool toolbar_anchor_valid_ = false;
