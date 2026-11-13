@@ -509,16 +509,11 @@ float VrMoonlightApp::OnDrawFrame() {
           window_locked_ ? 1 : 0, window_lock_pending_ ? 1 : 0);
     }
 
-    // Cardboard's official Android renderer uses the returned quaternion
-    // matrix as head_view (world-to-camera). The world-space head transform
-    // must therefore be its inverse. Keeping these as exact inverses makes
-    // view * world_anchor cancel when the head returns to its pose.
-    // Using the same rotation for both matrices makes the screen move with
-    // the head and reverses the world-space reticle/gaze direction.
-    const Quatf inverse_head_orientation(
-        -last_head_orientation_.x, -last_head_orientation_.y,
-        -last_head_orientation_.z, last_head_orientation_.w);
-    head_world_matrix_ = inverse_head_orientation.ToMatrix();
+    // ToMatrix() is the camera-to-world rotation. The matching view matrix
+    // is its inverse, built in GetViewMatrixFromPose(). Keep the world anchor
+    // in this forward direction so view * anchor remains stable at the pose
+    // where the window was locked.
+    head_world_matrix_ = last_head_orientation_.ToMatrix();
     head_world_matrix_.m[0][3] = 0.0f;
     head_world_matrix_.m[1][3] = 0.0f;
     head_world_matrix_.m[2][3] = 0.0f;
