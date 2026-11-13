@@ -153,15 +153,14 @@ Matrix4x4 GetScaleMatrix(const std::array<float, 3>& scale) {
 
 Matrix4x4 GetViewMatrixFromPose(const std::array<float, 3>& translation,
                                 const Quatf& orientation) {
-  // Match Google's Cardboard NDK sample: the quaternion returned by
-  // CardboardHeadTracker_getPose() is used directly as head_view. In this
-  // column-vector matrix convention that is orientation.ToMatrix().
-  // Translation is zeroed by the 3DoF renderer, but retain the standard
-  // world-to-camera translation order for callers that provide a position.
-  const Matrix4x4 head_view_rotation = orientation.ToMatrix();
+  // Cardboard returns the head/camera pose in the World frame. The view
+  // transform is the inverse camera pose: R^-1 * T^-1.
+  const Quatf inverse_orientation(-orientation.x, -orientation.y,
+                                  -orientation.z, orientation.w);
+  const Matrix4x4 world_to_head = inverse_orientation.ToMatrix();
   const Matrix4x4 inverse_translation = GetTranslationMatrix(
       {-translation[0], -translation[1], -translation[2]});
-  return head_view_rotation * inverse_translation;
+  return world_to_head * inverse_translation;
 }
 
 float AngleBetweenVectors(const std::array<float, 4>& vec1,
