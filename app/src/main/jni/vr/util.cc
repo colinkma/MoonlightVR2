@@ -98,9 +98,8 @@ Matrix4x4 Quatf::ToMatrix() const {
   const float zw = 2.0f * z * w;
 
   out.m[0][0] = 1 - yy - zz;
-  // This is the active camera-to-world rotation represented by the
-  // normalized Cardboard pose quaternion. The world-to-camera view matrix
-  // uses its conjugate to match Cardboard's MathFu matrix convention.
+  // Keep this convention aligned with Google's Cardboard NDK sample:
+  // its returned quaternion matrix is used directly as head_view.
   out.m[0][1] = xy - zw;
   out.m[0][2] = xz + yw;
   out.m[0][3] = 0.0f;
@@ -153,12 +152,10 @@ Matrix4x4 GetScaleMatrix(const std::array<float, 3>& scale) {
 
 Matrix4x4 GetViewMatrixFromPose(const std::array<float, 3>& translation,
                                 const Quatf& orientation) {
-  // Cardboard's MathFu quaternion matrix is the transpose of this
-  // project's active-rotation ToMatrix(). The NDK sample uses that transposed
-  // matrix as head_view (world-to-camera), so use the conjugate here.
-  const Quatf inverse_orientation(-orientation.x, -orientation.y,
-                                  -orientation.z, orientation.w);
-  const Matrix4x4 world_to_head = inverse_orientation.ToMatrix();
+  // Match Google's Cardboard NDK sample: use the returned pose quaternion
+  // directly for head_view. Its inverse is stored separately as the
+  // camera-to-world world anchor in VrMoonlightApp::OnDrawFrame().
+  const Matrix4x4 world_to_head = orientation.ToMatrix();
   const Matrix4x4 inverse_translation = GetTranslationMatrix(
       {-translation[0], -translation[1], -translation[2]});
   return world_to_head * inverse_translation;
