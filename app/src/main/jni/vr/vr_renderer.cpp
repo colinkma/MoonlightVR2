@@ -1042,6 +1042,10 @@ void VrMoonlightApp::RecenterView() {
     CardboardHeadTracker_recenter(head_tracker_);
     head_pose_valid_ = false;
     toolbar_anchor_valid_ = false;
+    // A recenter changes the tracker coordinate frame. Recapture a locked
+    // window anchor from the first valid pose in the new frame; otherwise the
+    // old anchor would be mixed with the recentered view and appear to jump.
+    window_lock_pending_ = window_locked_;
   }
 }
 
