@@ -704,7 +704,35 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
             }
 
             if (!newFormat) {
-                // We couldn't even configure a decoder without any low latency options
+                // Some Android codec implementations reject a high KEY_FRAME_RATE
+                // hint during configure(), even though the decoder can still decode
+                // the incoming stream. Retry with progressively lower hints before
+                // reporting the generic decoder initialization error. This does not
+                // change the host stream frame rate or the client's pacing target.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && refreshRate > 30) {
+                    int[] fallbackFrameRates = {90, 60, 30};
+                    boolean fallbackConfigured = false;
+                    for (int fallbackFrameRate : fallbackFrameRates) {
+                        if (fallbackFrameRate >= refreshRate) {
+                            continue;
+                        }
+                        mediaFormat.setInteger(MediaFormat.KEY_FRAME_RATE, fallbackFrameRate);
+                        LimeLog.warning("Decoder rejected " + refreshRate +
+                                " FPS format hint; retrying configure() with " +
+                                fallbackFrameRate + " FPS hint");
+                        if (tryConfigureDecoder(selectedDecoderInfo, mediaFormat, false)) {
+                            LimeLog.warning("Decoder configured with fallback frame-rate hint " +
+                                    fallbackFrameRate + " while keeping the requested stream rate " +
+                                    refreshRate + " FPS");
+                            fallbackConfigured = true;
+                            break;
+                        }
+                    }
+                    if (fallbackConfigured) {
+                        break;
+                    }
+                }
+                // We couldn't configure a decoder even after frame-rate hint fallbacks.
                 return -5;
             }
         }
