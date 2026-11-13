@@ -64,6 +64,9 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     private float[] cameraTextureTransform = new float[16];
     private float[] cameraTransformScratch = new float[16];
     private final float[] cameraRotationMatrix = new float[16];
+    // Rotation of the handset's screen plane relative to gravity. Used only
+    // to keep the passthrough image upright when the viewer is rolled.
+    private volatile float cameraGravityRotationDegrees = 0.0f;
     private SurfaceTexture cameraSurfaceTexture;
     private Surface cameraSurface;
     private volatile boolean cameraFrameAvailable = false;
@@ -106,13 +109,17 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
         cameraSurface = new Surface(cameraSurfaceTexture);
         setCameraTexture(cameraTextureId);
 
-        // precompute rotation matrix once - rotate +90 degrees around Z to correct orientation
-        Matrix.setIdentityM(cameraRotationMatrix, 0);
-        Matrix.translateM(cameraRotationMatrix, 0, 0.5f, 0.5f, 0f);
-        Matrix.rotateM(cameraRotationMatrix, 0, 90f, 0f, 0f, 1f);
-        Matrix.translateM(cameraRotationMatrix, 0, -0.5f, -0.5f, 0f);
+        updateCameraRotationMatrix();
 
         return cameraSurface;
+    }
+
+    private void updateCameraRotationMatrix() {
+        Matrix.setIdentityM(cameraRotationMatrix, 0);
+        Matrix.translateM(cameraRotationMatrix, 0, 0.5f, 0.5f, 0f);
+        Matrix.rotateM(cameraRotationMatrix, 0,
+                90f + cameraGravityRotationDegrees, 0f, 0f, 1f);
+        Matrix.translateM(cameraRotationMatrix, 0, -0.5f, -0.5f, 0f);
     }
 
     public void setCameraTexture(int textureId) {
@@ -199,6 +206,17 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
                 }
                 SensorManager.getOrientation(displayMatrix, orientation);
                 if (!Float.isFinite(orientation[0])) return;
+
+                // Project gravity into the display plane. Its direction gives
+                // the roll needed to keep the camera passthrough horizon
+                // upright even when the headset/phone is turned onto its side.
+                float gravityX = -displayMatrix[6];
+                float gravityY = -displayMatrix[7];
+                if (Float.isFinite(gravityX) && Float.isFinite(gravityY)
+                        && (gravityX * gravityX + gravityY * gravityY) > 0.04f) {
+                    cameraGravityRotationDegrees = (float) -Math.toDegrees(
+                            Math.atan2(gravityX, -gravityY));
+                }
 
                 magneticHeadingRadians = orientation[0];
                 // The geomagnetic azimuth is not a safe world-yaw reference
@@ -291,6 +309,7 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
                 cameraSurfaceTexture.updateTexImage();
                 cameraSurfaceTexture.getTransformMatrix(cameraTextureTransform);
                 System.arraycopy(cameraTextureTransform, 0, cameraTransformScratch, 0, 16);
+                updateCameraRotationMatrix();
                 Matrix.multiplyMM(cameraTextureTransform, 0, cameraRotationMatrix, 0, cameraTransformScratch, 0);
                 nativeSetCameraTextureTransform(nativeHandle, cameraTextureTransform);
                 cameraFrameAvailable = false;
