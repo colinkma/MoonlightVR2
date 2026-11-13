@@ -1109,6 +1109,8 @@ void VrMoonlightApp::UpdateSpatialGaze() {
       magnetic_yaw_reference_valid_ = false;
       magnetic_yaw_correction_radians_ = 0.0f;
       last_magnetic_yaw_update_nano_ = 0;
+      magnetic_yaw_stationary_since_nano_ = 0;
+      raw_head_world_valid_ = false;
       toolbar_anchor_valid_ = false;
       window_locked_ = true;
       window_lock_pending_ = true;
