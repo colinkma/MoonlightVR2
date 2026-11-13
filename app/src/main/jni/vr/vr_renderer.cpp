@@ -402,6 +402,11 @@ void VrMoonlightApp::SetDisplayMode(int mode) {
   if (mode == 1) {
     if (head_tracker_ == nullptr) {
       head_tracker_ = CardboardHeadTracker_create();
+      if (head_tracker_ != nullptr) {
+        // Match the official Cardboard NDK sample to suppress high-frequency
+        // sensor noise without adding frame-by-frame pose accumulation.
+        CardboardHeadTracker_setLowPassFilter(head_tracker_, 6);
+      }
     }
     if (head_tracker_ != nullptr) {
       display_mode_ = 1;
@@ -473,7 +478,8 @@ float VrMoonlightApp::OnDrawFrame() {
   if (display_mode_ == 1 && head_tracker_ != nullptr) {
     float position[3] = {0.0f, 0.0f, 0.0f};
     float orientation[4] = {0.0f, 0.0f, 0.0f, 1.0f};
-    CardboardHeadTracker_getPose(head_tracker_, GetBootTimeNano(),
+    // Match the official Cardboard NDK sample's 50 ms prediction horizon.
+    CardboardHeadTracker_getPose(head_tracker_, GetBootTimeNano() + 50000000LL,
                                  viewport_orientation_, position, orientation);
 
     // Reject invalid sensor samples rather than allowing a zero/NaN quaternion
@@ -509,11 +515,14 @@ float VrMoonlightApp::OnDrawFrame() {
           window_locked_ ? 1 : 0, window_lock_pending_ ? 1 : 0);
     }
 
-    // ToMatrix() is the camera-to-world rotation. The matching view matrix
-    // is its inverse, built in GetViewMatrixFromPose(). Keep the world anchor
-    // in this forward direction so view * anchor remains stable at the pose
-    // where the window was locked.
-    head_world_matrix_ = last_head_orientation_.ToMatrix();
+    // Cardboard's returned quaternion is the head_view rotation (the
+    // world-to-camera transform), as used by Google's NDK sample. The
+    // camera-to-world transform used for world anchors, gaze and reticle is
+    // therefore its conjugate/inverse.
+    const Quatf inverse_head_orientation(
+        -last_head_orientation_.x, -last_head_orientation_.y,
+        -last_head_orientation_.z, last_head_orientation_.w);
+    head_world_matrix_ = inverse_head_orientation.ToMatrix();
     head_world_matrix_.m[0][3] = 0.0f;
     head_world_matrix_.m[1][3] = 0.0f;
     head_world_matrix_.m[2][3] = 0.0f;
@@ -527,8 +536,8 @@ float VrMoonlightApp::OnDrawFrame() {
       window_lock_pending_ = false;
     }
 
-    // The camera-to-world matrix maps the local -Z gaze ray into world space.
-    // With this Cardboard pose convention, negative pitch means looking down.
+    // Extract pitch from the world-space forward vector (camera local -Z).
+    // Its Y component is negative when the user looks down.
     const float sin_pitch = std::clamp(-head_world_matrix_.m[1][2], -1.0f, 1.0f);
     head_pitch_degrees_ = std::asin(sin_pitch) * 180.0f /
                           3.14159265358979323846f;
@@ -691,8 +700,8 @@ bool VrMoonlightApp::UpdateDeviceParams() {
     std::vector<float> custom_right_uvs(right_mesh.uvs,
                                         right_mesh.uvs + right_mesh.n_vertices * 2);
 
-    TransformLensMesh(custom_left, lens_scale_, left_lens_offset_x_, true);
-    TransformLensMesh(custom_right, lens_scale_, right_lens_offset_x_, false);
+    TransformLensMesh(custom_left, lens_scale_, left_lens_offset_x_);
+    TransformLensMesh(custom_right, lens_scale_, right_lens_offset_x_);
     ApplyLensDistortionStrength(left_mesh, custom_left_uvs);
     ApplyLensDistortionStrength(right_mesh, custom_right_uvs);
 
@@ -734,7 +743,7 @@ void VrMoonlightApp::ApplyLensDistortionStrength(const CardboardMesh& source,
 }
 
 void VrMoonlightApp::TransformLensMesh(std::vector<float>& vertices, float scale,
-                                       float offset_x, bool is_left_eye) {
+                                       float offset_x) {
   if (vertices.empty()) {
     return;
   }
@@ -757,14 +766,13 @@ void VrMoonlightApp::TransformLensMesh(std::vector<float>& vertices, float scale
   const float scaled_min_x = c_x + (min_x - c_x) * scale;
   const float scaled_max_x = c_x + (max_x - c_x) * scale;
 
-  const float half_min = is_left_eye ? -1.0f : 0.0f;
-  const float half_max = is_left_eye ? 0.0f : 1.0f;
-
-  const float tx_min = half_min - scaled_min_x;
-  const float tx_max = half_max - scaled_max_x;
-  const float safe_tx_min = std::min(tx_min, tx_max);
-  const float safe_tx_max = std::max(tx_min, tx_max);
-  const float safe_offset_x = std::clamp(offset_x, safe_tx_min, safe_tx_max);
+  // Cardboard's per-eye meshes already encode the physical lens centers
+  // and may have intentionally asymmetric bounds. Never force each mesh into
+  // an artificial half-screen rectangle; that destroys the SDK's stereo
+  // alignment. Only constrain custom scaling/offset to the full display.
+  const float tx_min = -1.0f - scaled_min_x;
+  const float tx_max = 1.0f - scaled_max_x;
+  const float safe_offset_x = std::clamp(offset_x, tx_min, tx_max);
 
   for (size_t i = 0; i + 1 < vertices.size(); i += 2) {
     vertices[i] = c_x + (vertices[i] - c_x) * scale + safe_offset_x;
