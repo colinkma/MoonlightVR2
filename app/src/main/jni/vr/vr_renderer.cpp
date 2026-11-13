@@ -1099,11 +1099,11 @@ void VrMoonlightApp::UpdateSpatialGaze() {
   }
 
   gaze_target_ = -1;
-  if (control_ray_valid && std::fabs(local_y) < 0.105f) {
-    const float centers[]={-0.80f,-0.40f,0.f,0.40f,0.80f};
-    for(int i=0;i<5;++i) {
-      if(std::fabs(local_x-centers[i])<0.145f) { gaze_target_=i; break; }
-    }
+  // The toolbar now contains only the window-placement toggle. Screen
+  // distance is adjusted exclusively by the Settings seek bar.
+  if (control_ray_valid && std::fabs(local_y) < 0.105f &&
+      std::fabs(local_x) < 0.145f) {
+    gaze_target_ = 0;
   }
 
   // Aiming into the strip immediately above the visible toolbar for two
@@ -1180,11 +1180,7 @@ void VrMoonlightApp::UpdateSpatialGaze() {
 
   if(gaze_target_>=0&&gaze_dwell_seconds_>=kGazeDwellSeconds&&gaze_action_armed_) {
     switch(gaze_target_) {
-      case 0: AdjustScreenDistance(-0.15f); break;
-      case 1: AdjustScreenDistance(0.15f); break;
-      case 2: AdjustScreenSize(-0.10f); break;
-      case 3: AdjustScreenSize(0.10f); break;
-      case 4:
+      case 0:
         window_edit_mode_=!window_edit_mode_;
         window_dragging_=false;
         window_select_dwell_seconds_=0.f;
@@ -1267,7 +1263,6 @@ void VrMoonlightApp::DrawSpatialControls(const Matrix4x4& vp) {
   glUseProgram(spatial_ui_program_);
   glEnableVertexAttribArray(spatial_ui_pos_attrib_);
   glVertexAttribPointer(spatial_ui_pos_attrib_,3,GL_FLOAT,GL_FALSE,0,kSpatialUiQuad);
-  const float centers[]={-0.80f,-0.40f,0.f,0.40f,0.80f};
   const auto rect=[&](float x,float y,float z,float w,float h,const float* color) {
     const Matrix4x4 local=GetTranslationMatrix({x,y,z})*GetScaleMatrix({w,h,1.f});
     const auto mvp=(vp*control_world*local).ToGlArray();
@@ -1276,34 +1271,20 @@ void VrMoonlightApp::DrawSpatialControls(const Matrix4x4& vp) {
     glDrawArrays(GL_TRIANGLES,0,6);
   };
   if (draw_toolbar) {
-  const float panel[]={0.018f,0.024f,0.038f,0.92f};
-  const float normal[]={0.13f,0.16f,0.21f,1.f};
-  const float focus[]={0.08f,0.38f,0.72f,1.f};
-  const float locked_color[]={0.08f,0.28f,0.20f,1.f};
-  const float edit_color[]={0.42f,0.22f,0.08f,1.f};
-  const float white[]={0.9f,0.94f,1.f,1.f};
-  rect(0.f,0.f,0.025f,2.02f,0.27f,panel);
-  for(int i=0;i<5;++i) {
-    rect(centers[i],0.f,0.035f,0.31f,0.20f,
-         gaze_target_==i?focus:(i==4&&window_edit_mode_?edit_color:(i==4&&window_locked_?locked_color:normal)));
-    if(i<2) {
-      rect(centers[i],0.f,0.046f,0.105f,0.012f,white);
-      if(i==1) rect(centers[i],0.f,0.047f,0.012f,0.105f,white);
-    } else if(i<4) {
-      rect(centers[i]-0.035f,0.f,0.046f,0.012f,0.085f,white);
-      rect(centers[i]+0.035f,0.f,0.046f,0.012f,0.085f,white);
-      rect(centers[i],0.f,0.046f,0.06f,0.012f,white);
-      if(i==3) rect(centers[i],0.f,0.047f,0.012f,0.06f,white);
-    } else {
-      // Four corner marks: spatial placement/edit mode, not a padlock.
-      rect(centers[i]-0.035f,0.025f,0.046f,0.012f,0.035f,white);
-      rect(centers[i]+0.035f,0.025f,0.046f,0.012f,0.035f,white);
-      rect(centers[i]-0.035f,-0.025f,0.046f,0.012f,0.035f,white);
-      rect(centers[i]+0.035f,-0.025f,0.046f,0.012f,0.035f,white);
-    }
-
-  }
-
+    const float panel[]={0.018f,0.024f,0.038f,0.92f};
+    const float normal[]={0.13f,0.16f,0.21f,1.f};
+    const float focus[]={0.08f,0.38f,0.72f,1.f};
+    const float locked_color[]={0.08f,0.28f,0.20f,1.f};
+    const float edit_color[]={0.42f,0.22f,0.08f,1.f};
+    const float white[]={0.9f,0.94f,1.f,1.f};
+    rect(0.f,0.f,0.025f,0.62f,0.27f,panel);
+    rect(0.f,0.f,0.035f,0.31f,0.20f,
+         gaze_target_==0?focus:(window_edit_mode_?edit_color:(window_locked_?locked_color:normal)));
+    // Four corner marks indicate the spatial window placement/edit mode.
+    rect(-0.035f,0.025f,0.046f,0.012f,0.035f,white);
+    rect(0.035f,0.025f,0.046f,0.012f,0.035f,white);
+    rect(-0.035f,-0.025f,0.046f,0.012f,0.035f,white);
+    rect(0.035f,-0.025f,0.046f,0.012f,0.035f,white);
   }
 
   // Minimal gaze marker: a small dim point appears only while the
