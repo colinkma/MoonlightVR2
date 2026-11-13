@@ -970,36 +970,49 @@ void VrMoonlightApp::UpdateSpatialGaze() {
     }
   }
 
-  // Looking just above the toolbar for two seconds recentres the screen.
-  const bool recenter_target = control_ray_valid && local_x > -0.9f &&
-      local_x < 0.9f && local_y > 0.22f && local_y < 0.82f;
+  // Aiming into the strip immediately above the visible toolbar for two
+  // seconds performs a true Cardboard yaw recenter and re-anchors the window.
+  // Keep this independent of toolbar button hit-testing so the gap above the
+  // controls remains a dedicated, reliable gaze target.
+  const bool recenter_target = !window_edit_mode_ && control_ray_valid &&
+      std::fabs(local_x) < 1.0f && local_y > 0.18f && local_y < 0.95f;
+  if (recenter_target) {
+    spatial_controls_visible_ = true;
+    last_spatial_controls_gaze_nano_ = now;
+  }
   if (recenter_target && recenter_action_armed_) {
     if (last_recenter_frame_nano_ != 0) {
-      const float dt=static_cast<float>(now-last_recenter_frame_nano_)/1.0e9f;
-      recenter_dwell_seconds_ += std::clamp(dt,0.f,0.05f);
+      const float dt = static_cast<float>(now - last_recenter_frame_nano_) / 1.0e9f;
+      recenter_dwell_seconds_ += std::clamp(dt, 0.0f, 0.05f);
     }
     if (recenter_dwell_seconds_ >= kRecenterDwellSeconds) {
-      // Preserve user-selected size and viewing distance; reset only the
-      // window's angular offset and anchor it directly in front of the user.
-      screen_yaw_radians_=0.f;
-      screen_pitch_radians_=0.f;
-      screen_rotation_radians_=0.f;
+      // Preserve size and distance. Cardboard's recenter removes accumulated
+      // yaw drift; defer anchor capture until the next pose arrives in the
+      // recentered tracking frame, avoiding a mixed-frame transform.
+      screen_yaw_radians_ = 0.0f;
+      screen_pitch_radians_ = 0.0f;
+      screen_rotation_radians_ = 0.0f;
       UpdateModelMatrix();
-      window_anchor_matrix_=head_world_matrix_;
-      window_locked_=true;
-      window_lock_pending_=false;
-      window_edit_mode_=false;
-      window_dragging_=false;
-      window_select_dwell_seconds_=0.f;
-      window_select_armed_=true;
-      recenter_action_armed_=false;
-      recenter_dwell_seconds_=0.f;
+      if (head_tracker_ != nullptr) {
+        CardboardHeadTracker_recenter(head_tracker_);
+      }
+      head_pitch_reference_valid_ = false;
+      toolbar_anchor_valid_ = false;
+      window_locked_ = true;
+      window_lock_pending_ = true;
+      window_edit_mode_ = false;
+      window_dragging_ = false;
+      window_select_dwell_seconds_ = 0.0f;
+      window_select_armed_ = true;
+      recenter_action_armed_ = false;
+      recenter_dwell_seconds_ = 0.0f;
+      VR_LOGE("Spatial gaze recenter triggered; waiting for recentered head pose");
     }
   } else if (!recenter_target) {
-    recenter_dwell_seconds_=0.f;
-    recenter_action_armed_=true;
+    recenter_dwell_seconds_ = 0.0f;
+    recenter_action_armed_ = true;
   }
-  last_recenter_frame_nano_=now;
+  last_recenter_frame_nano_ = now;
 
   if (gaze_target_ >= 0) {
     spatial_controls_visible_ = true;
@@ -1214,6 +1227,9 @@ void VrMoonlightApp::DestroyCardboardResources() {
 
 void VrMoonlightApp::RecenterView() {
   head_pitch_reference_valid_ = false;
+  recenter_dwell_seconds_ = 0.0f;
+  last_recenter_frame_nano_ = 0;
+  recenter_action_armed_ = true;
   if (head_tracker_ != nullptr) {
     CardboardHeadTracker_recenter(head_tracker_);
     head_pose_valid_ = false;
