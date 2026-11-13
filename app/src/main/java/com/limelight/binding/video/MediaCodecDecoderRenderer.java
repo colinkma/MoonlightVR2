@@ -608,8 +608,13 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
             }
         } finally {
             if (!configured && videoDecoder != null) {
-                videoDecoder.release();
+                MediaCodec failedDecoder = videoDecoder;
                 videoDecoder = null;
+                try {
+                    failedDecoder.release();
+                } catch (IllegalStateException releaseError) {
+                    LimeLog.warning("Failed to release partially configured decoder: " + releaseError.getMessage());
+                }
             }
         }
         return configured;
@@ -825,7 +830,15 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
                 // throw away the old decoder and reinitialize a new one from scratch.
                 if (codecRecoveryType.get() == CR_RECOVERY_TYPE_RESET) {
                     LimeLog.warning("Trying to recreate decoder after CodecException");
-                    videoDecoder.release();
+                    MediaCodec failedDecoder = videoDecoder;
+                    videoDecoder = null;
+                    if (failedDecoder != null) {
+                        try {
+                            failedDecoder.release();
+                        } catch (IllegalStateException releaseError) {
+                            LimeLog.warning("Failed to release decoder before recreation: " + releaseError.getMessage());
+                        }
+                    }
 
                     try {
                         int err = initializeDecoder(true);
