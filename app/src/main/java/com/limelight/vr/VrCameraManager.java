@@ -123,7 +123,7 @@ public class VrCameraManager {
                 camera.close();
                 if (currentRequest) {
                     Log.w(TAG, "Camera disconnected");
-                    stopCamera();
+                    stopCameraForGeneration(generation);
                 }
             }
 
@@ -139,7 +139,7 @@ public class VrCameraManager {
                 camera.close();
                 if (currentRequest) {
                     Log.e(TAG, "Camera error: " + error);
-                    stopCamera();
+                    stopCameraForGeneration(generation);
                 }
             }
         };
@@ -188,7 +188,7 @@ public class VrCameraManager {
                                 }
                             }
                             Log.e(TAG, "Camera configuration failed");
-                            stopCamera();
+                            stopCameraForGeneration(generation);
                         }
                     },
                     targetHandler
@@ -200,7 +200,7 @@ public class VrCameraManager {
                     return;
                 }
             }
-            stopCamera();
+            stopCameraForGeneration(generation);
         }
     }
 
@@ -242,11 +242,22 @@ public class VrCameraManager {
                     return;
                 }
             }
-            stopCamera();
+            stopCameraForGeneration(generation);
         }
     }
 
+    private synchronized void stopCameraForGeneration(int generation) {
+        if (generation != cameraGeneration) {
+            return;
+        }
+        stopCameraInternal();
+    }
+
     public synchronized void stopCamera() {
+        stopCameraInternal();
+    }
+
+    private void stopCameraInternal() {
         // Invalidate callbacks before closing resources. A late onOpened() or
         // onConfigured() from this request must not attach to a later session.
         ++cameraGeneration;
