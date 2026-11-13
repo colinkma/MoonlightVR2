@@ -509,12 +509,6 @@ float VrMoonlightApp::OnDrawFrame() {
           window_locked_ ? 1 : 0, window_lock_pending_ ? 1 : 0);
     }
 
-    // CardboardHeadTracker_getPose() returns the device/head orientation
-    // in world coordinates (head-to-world). ToMatrix() builds that rotation.
-    // GetViewMatrixFromPose() performs the inverse for rendering. Do NOT invert
-    // the quaternion here as well: doing so makes view and model rotations point
-    // in the same direction, doubling head motion and making the world-locked
-    // screen appear to orbit/drift when the user pitches or rolls the phone.
     // Cardboard's official Android renderer uses the returned quaternion
     // matrix as head_view (world-to-camera). The world-space head transform
     // must therefore be its inverse. Keeping these as exact inverses makes
