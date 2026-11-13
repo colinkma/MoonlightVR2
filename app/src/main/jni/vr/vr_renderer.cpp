@@ -912,68 +912,166 @@ void VrMoonlightApp::RenderSpatialVideoToTexture() {
 }
 
 void VrMoonlightApp::UpdateSpatialGaze() {
-  // Use the same window-relative transform for both gaze hit-testing and drawing.
+  const int64_t now = GetBootTimeNano();
   const Matrix4x4 window_world =
       (window_locked_ ? window_anchor_matrix_ : head_world_matrix_) * model_matrix_;
-  // Attach the toolbar to the upper edge of the floating window. The
-  // The screen uses an upright local Y axis, so positive local Y is above it.
   const Matrix4x4 control_world =
       window_world * GetTranslationMatrix({0.0f, 1.18f, 0.04f}) *
       GetScaleMatrix({0.75f, 0.50f, 1.0f});
-  Matrix4x4 inverse;
-  if(!InvertMatrix(control_world,inverse)) { gaze_target_=-1; gaze_dwell_seconds_=0.f; gaze_action_armed_=true; return; }
-  const std::array<float,4> origin={0.f,0.f,0.f,1.f};
-  const std::array<float,4> forward={-head_world_matrix_.m[0][2],-head_world_matrix_.m[1][2],-head_world_matrix_.m[2][2],0.f};
-  const auto o=inverse*origin, d=inverse*forward;
-  constexpr float plane_z=0.035f;
-  if(std::fabs(d[2])<1e-5f) gaze_target_=-1;
-  else {
-    const float t=(plane_z-o[2])/d[2];
-    const float x=o[0]+t*d[0], y=o[1]+t*d[1];
-    const float centers[]={-0.80f,-0.40f,0.f,0.40f,0.80f};
-    gaze_target_=-1;
-    if(t>0.f) for(int i=0;i<5;++i)
-      if(std::fabs(x-centers[i])<0.145f&&std::fabs(y)<0.105f) { gaze_target_=i; break; }
+
+  Matrix4x4 inverse_control;
+  float local_x = 0.0f, local_y = 0.0f;
+  bool control_ray_valid = InvertMatrix(control_world, inverse_control);
+  if (control_ray_valid) {
+    const std::array<float,4> origin={0.f,0.f,0.f,1.f};
+    const std::array<float,4> forward={-head_world_matrix_.m[0][2],-head_world_matrix_.m[1][2],-head_world_matrix_.m[2][2],0.f};
+    const auto o=inverse_control*origin, d=inverse_control*forward;
+    constexpr float plane_z=0.035f;
+    if(std::fabs(d[2])<1e-5f) control_ray_valid=false;
+    else {
+      const float t=(plane_z-o[2])/d[2];
+      local_x=o[0]+t*d[0]; local_y=o[1]+t*d[1];
+      if(t<=0.f) control_ray_valid=false;
+    }
   }
-  const int64_t now=GetBootTimeNano();
+
+  gaze_target_ = -1;
+  if (control_ray_valid && std::fabs(local_y) < 0.105f) {
+    const float centers[]={-0.80f,-0.40f,0.f,0.40f,0.80f};
+    for(int i=0;i<5;++i) {
+      if(std::fabs(local_x-centers[i])<0.145f) { gaze_target_=i; break; }
+    }
+  }
+
+  // Looking just above the toolbar for two seconds recentres the screen.
+  const bool recenter_target = control_ray_valid && local_x > -0.9f &&
+      local_x < 0.9f && local_y > 0.22f && local_y < 0.82f;
+  if (recenter_target && recenter_action_armed_) {
+    if (last_recenter_frame_nano_ != 0) {
+      const float dt=static_cast<float>(now-last_recenter_frame_nano_)/1.0e9f;
+      recenter_dwell_seconds_ += std::clamp(dt,0.f,0.05f);
+    }
+    if (recenter_dwell_seconds_ >= kRecenterDwellSeconds) {
+      // Preserve user-selected size and viewing distance; reset only the
+      // window's angular offset and anchor it directly in front of the user.
+      screen_yaw_radians_=0.f;
+      screen_pitch_radians_=0.f;
+      screen_rotation_radians_=0.f;
+      UpdateModelMatrix();
+      window_anchor_matrix_=head_world_matrix_;
+      window_locked_=true;
+      window_lock_pending_=false;
+      recenter_action_armed_=false;
+      recenter_dwell_seconds_=0.f;
+    }
+  } else if (!recenter_target) {
+    recenter_dwell_seconds_=0.f;
+    recenter_action_armed_=true;
+  }
+  last_recenter_frame_nano_=now;
+
   if (gaze_target_ >= 0) {
     spatial_controls_visible_ = true;
     last_spatial_controls_gaze_nano_ = now;
-  } else {
-    if (last_spatial_controls_gaze_nano_ == 0) {
-      last_spatial_controls_gaze_nano_ = now;
-    }
-    if (spatial_controls_auto_hide_ &&
-        now - last_spatial_controls_gaze_nano_ >= 3000000000LL) {
-      spatial_controls_visible_ = false;
-    }
+  } else if (last_spatial_controls_gaze_nano_ == 0) {
+    last_spatial_controls_gaze_nano_ = now;
+  } else if (spatial_controls_auto_hide_ &&
+             now-last_spatial_controls_gaze_nano_>=3000000000LL) {
+    spatial_controls_visible_=false;
   }
+
   if (gaze_target_ != previous_gaze_target_) {
-    gaze_dwell_seconds_ = 0.0f;
-    gaze_action_armed_ = true;
-    previous_gaze_target_ = gaze_target_;
+    gaze_dwell_seconds_=0.f;
+    gaze_action_armed_=true;
+    previous_gaze_target_=gaze_target_;
   }
   if(gaze_target_>=0&&last_gaze_frame_nano_!=0) {
     const float dt=static_cast<float>(now-last_gaze_frame_nano_)/1.0e9f;
     gaze_dwell_seconds_+=std::clamp(dt,0.f,0.05f);
   } else if(gaze_target_<0) gaze_dwell_seconds_=0.f;
   last_gaze_frame_nano_=now;
-  if(gaze_target_<0) gaze_action_armed_=true;
-  else if(gaze_dwell_seconds_>=kGazeDwellSeconds&&gaze_action_armed_) {
+
+  if(gaze_target_>=0&&gaze_dwell_seconds_>=kGazeDwellSeconds&&gaze_action_armed_) {
     switch(gaze_target_) {
       case 0: AdjustScreenDistance(-0.15f); break;
       case 1: AdjustScreenDistance(0.15f); break;
       case 2: AdjustScreenSize(-0.10f); break;
       case 3: AdjustScreenSize(0.10f); break;
       case 4:
-        if(window_locked_) { window_locked_=false; window_lock_pending_=false; }
-        else { window_anchor_matrix_=head_world_matrix_; window_locked_=true; window_lock_pending_=false; }
+        window_edit_mode_=!window_edit_mode_;
+        window_dragging_=false;
+        window_select_dwell_seconds_=0.f;
+        window_select_armed_=true;
+        if (!window_edit_mode_) {
+          window_locked_=true;
+          window_anchor_matrix_=head_world_matrix_ * model_matrix_;
+          // The anchor stores the world orientation of the window itself;
+          // remove the model transform because it remains applied at draw time.
+          Matrix4x4 inverse_model;
+          if (InvertMatrix(model_matrix_,inverse_model))
+            window_anchor_matrix_=head_world_matrix_;
+        }
         break;
     }
-    gaze_action_armed_=false; gaze_dwell_seconds_=0.f;
+    gaze_action_armed_=false;
+    gaze_dwell_seconds_=0.f;
   }
-}
 
+  // In edit mode, stare at the video window for three seconds to grab it.
+  bool video_hit=false;
+  if(window_edit_mode_&&!window_dragging_) {
+    Matrix4x4 inverse_window;
+    if(InvertMatrix(window_world,inverse_window)) {
+      const std::array<float,4> origin={0.f,0.f,0.f,1.f};
+      const std::array<float,4> forward={-head_world_matrix_.m[0][2],-head_world_matrix_.m[1][2],-head_world_matrix_.m[2][2],0.f};
+      const auto o=inverse_window*origin,d=inverse_window*forward;
+      if(std::fabs(d[2])>1e-5f) {
+        const float t=-o[2]/d[2];
+        const float x=o[0]+t*d[0],y=o[1]+t*d[1];
+        video_hit=t>0.f&&std::fabs(x)<1.0f&&std::fabs(y)<1.0f;
+      }
+    }
+    if(video_hit&&window_select_armed_) {
+      if(last_window_select_frame_nano_!=0) {
+        const float dt=static_cast<float>(now-last_window_select_frame_nano_)/1.0e9f;
+        window_select_dwell_seconds_+=std::clamp(dt,0.f,0.05f);
+      }
+      if(window_select_dwell_seconds_>=kWindowSelectDwellSeconds) {
+        window_dragging_=true;
+        drag_start_head_matrix_=head_world_matrix_;
+        drag_start_window_matrix_=window_anchor_matrix_;
+        window_last_motion_nano_=now;
+        window_select_armed_=false;
+      }
+    } else if(!video_hit) {
+      window_select_dwell_seconds_=0.f;
+      window_select_armed_=true;
+    }
+  }
+
+  if(window_dragging_) {
+    Matrix4x4 inverse_start_head;
+    if(InvertMatrix(drag_start_head_matrix_,inverse_start_head)) {
+      const Matrix4x4 delta=head_world_matrix_*inverse_start_head;
+      const Matrix4x4 moved=delta*drag_start_window_matrix_;
+      float motion=0.f;
+      for(int row=0;row<3;++row) for(int col=0;col<3;++col)
+        motion+=std::fabs(head_world_matrix_.m[row][col]-drag_start_head_matrix_.m[row][col]);
+      if(motion>0.003f) {
+        window_anchor_matrix_=moved;
+        drag_start_head_matrix_=head_world_matrix_;
+        drag_start_window_matrix_=moved;
+        window_last_motion_nano_=now;
+      } else if(now-window_last_motion_nano_>=
+                static_cast<int64_t>(kWindowIdleReleaseSeconds*1.0e9f)) {
+        window_dragging_=false;
+        window_select_dwell_seconds_=0.f;
+        window_select_armed_=false;
+      }
+    }
+  }
+  last_window_select_frame_nano_=now;
+}
 void VrMoonlightApp::DrawSpatialControls(const Matrix4x4& vp) {
   if (spatial_controls_auto_hide_ && !spatial_controls_visible_) return;
   const Matrix4x4 window_world =
