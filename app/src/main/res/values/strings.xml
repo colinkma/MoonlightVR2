@@ -231,7 +231,7 @@
     <string name="summary_checkbox_enable_pip">Allows the stream to be viewed (but not controlled) while multitasking</string>
     <string name="title_checkbox_enable_vr">Enable VR mode</string>
     <string name="title_checkbox_enable_vr_spatial_mode">3D floating screen mode</string>
-    <string name="summary_checkbox_enable_vr_spatial_mode">Show the stream as a floating 3D screen. Aim at the in-screen toolbar with the headset centre view and dwell for about 0.8 seconds to adjust distance, size, or lock the screen. Cardboard uses head direction, not eye tracking.</string>
+    <string name="summary_checkbox_enable_vr_spatial_mode">Show the stream as a floating 3D screen. Dwell on the small toolbar button for about 0.8 seconds to enter or exit window placement mode. In placement mode, look at the screen for 3 seconds to grab it, move your head to reposition it, and pause for 1 second to release it. Cardboard uses head direction, not eye tracking.</string>
     <string name="title_vr_controls_auto_hide">Automatically hide VR control bar</string>
     <string name="summary_vr_controls_auto_hide">Hide the control bar after 3 seconds when you are not looking at it. Look toward the top edge of the floating screen to show it again.</string>
     <string name="title_checkbox_enable_vr_camera_passthrough">Camera passthrough when looking down</string>
