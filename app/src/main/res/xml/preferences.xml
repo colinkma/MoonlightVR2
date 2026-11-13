@@ -59,6 +59,17 @@
             android:title="@string/title_vr_controls_auto_hide"
             android:summary="@string/summary_vr_controls_auto_hide"
             android:defaultValue="true" />
+        <com.limelight.preferences.SeekBarPreference
+            android:key="seekbar_vr_screen_distance"
+            android:dependency="checkbox_enable_vr_spatial_mode"
+            android:dialogMessage="@string/summary_seekbar_vr_screen_distance"
+            seekbar:min="10"
+            android:max="40"
+            seekbar:step="1"
+            android:defaultValue="28"
+            android:summary="@string/summary_seekbar_vr_screen_distance"
+            android:text="@string/suffix_seekbar_vr_distance"
+            android:title="@string/title_seekbar_vr_screen_distance" />
         <CheckBoxPreference
             android:key="checkbox_enable_vr_camera_passthrough"
             android:dependency="checkbox_enable_vr_spatial_mode"
