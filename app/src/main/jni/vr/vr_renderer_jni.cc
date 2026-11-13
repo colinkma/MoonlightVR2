@@ -79,6 +79,14 @@ Java_com_limelight_vr_VrRenderer_nativeSetViewportOrientation(JNIEnv*, jobject,
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_com_limelight_vr_VrRenderer_nativeSetMagneticHeading(
+    JNIEnv*, jobject, jlong handle, jfloat headingRadians,
+    jfloat headingAccuracyRadians, jint sensorAccuracy) {
+  FromHandle(handle)->SetMagneticHeading(
+      headingRadians, headingAccuracyRadians, sensorAccuracy);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_com_limelight_vr_VrRenderer_nativeSetWindowLocked(JNIEnv*, jobject,
                                                        jlong handle,
                                                        jboolean locked) {
