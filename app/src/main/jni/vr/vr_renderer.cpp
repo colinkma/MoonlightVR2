@@ -399,6 +399,7 @@ void VrMoonlightApp::SetVideoAspectRatio(float aspect_ratio) {
 }
 
 void VrMoonlightApp::SetDisplayMode(int mode) {
+  head_pitch_reference_valid_ = false;
   if (mode == 1) {
     if (head_tracker_ == nullptr) {
       head_tracker_ = CardboardHeadTracker_create();
@@ -536,9 +537,22 @@ float VrMoonlightApp::OnDrawFrame() {
       window_lock_pending_ = false;
     }
 
-    // Extract pitch from the world-space forward vector (camera local -Z).
-    // Its Y component is negative when the user looks down.
-    const float sin_pitch = std::clamp(-head_world_matrix_.m[1][2], -1.0f, 1.0f);
+    // Establish a neutral pose when spatial mode starts. Camera activation
+    // must respond to the user's relative head movement, not to the phone's
+    // absolute mounting angle or the device's natural screen orientation.
+    if (!head_pitch_reference_valid_) {
+      head_pitch_reference_orientation_ = last_head_orientation_;
+      head_pitch_reference_valid_ = true;
+    }
+    const Quatf inverse_current_orientation(
+        -last_head_orientation_.x, -last_head_orientation_.y,
+        -last_head_orientation_.z, last_head_orientation_.w);
+    const Quatf relative_camera_orientation =
+        head_pitch_reference_orientation_ * inverse_current_orientation;
+    const Matrix4x4 relative_camera_world = relative_camera_orientation.ToMatrix();
+    // A downward head rotation produces a negative pitch value.
+    const float sin_pitch = std::clamp(-relative_camera_world.m[1][2],
+                                       -1.0f, 1.0f);
     head_pitch_degrees_ = std::asin(sin_pitch) * 180.0f /
                           3.14159265358979323846f;
     RenderSpatialVideoToTexture();
@@ -572,6 +586,7 @@ void VrMoonlightApp::OnPause() {
 }
 
 void VrMoonlightApp::OnResume() {
+  head_pitch_reference_valid_ = false;
   device_params_changed_ = true;
   if (display_mode_ == 1 && head_tracker_ != nullptr) {
     CardboardHeadTracker_resume(head_tracker_);
@@ -1040,6 +1055,7 @@ void VrMoonlightApp::DestroyCardboardResources() {
 }
 
 void VrMoonlightApp::RecenterView() {
+  head_pitch_reference_valid_ = false;
   if (head_tracker_ != nullptr) {
     CardboardHeadTracker_recenter(head_tracker_);
     head_pose_valid_ = false;
