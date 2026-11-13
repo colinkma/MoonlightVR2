@@ -1048,8 +1048,10 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
         // be required even if the codec died before giving any output.
         doCodecRecoveryIfRequired(CR_FLAG_CHOREOGRAPHER);
 
-        // Request another callback for next frame
-        Choreographer.getInstance().postFrameCallback(this);
+        // Do not leave a callback queued after shutdown has begun.
+        if (!stopping) {
+            Choreographer.getInstance().postFrameCallback(this);
+        }
     }
 
     private void startChoreographerThread() {
@@ -1343,22 +1345,35 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
             }
         }
 
-        // Wait for the renderer thread to shut down
-        try {
-            rendererThread.join();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+        // Wait for the renderer thread to shut down. setup()/start() may fail
+        // before this thread is created, so teardown must also be safe in that case.
+        if (rendererThread != null) {
+            try {
+                rendererThread.join();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
 
-            // InterruptedException clears the thread's interrupt status. Since we can't
-            // handle that here, we will re-interrupt the thread to set the interrupt
-            // status back to true.
-            Thread.currentThread().interrupt();
+                // InterruptedException clears the interrupt status; restore it.
+                Thread.currentThread().interrupt();
+            }
+            rendererThread = null;
         }
     }
 
     @Override
     public void cleanup() {
-        videoDecoder.release();
+        // Connection setup and codec recovery can both fail before a live codec
+        // exists. Detach the reference before releasing so repeated cleanup calls
+        // cannot release the same MediaCodec instance twice.
+        MediaCodec decoder = videoDecoder;
+        videoDecoder = null;
+        if (decoder != null) {
+            try {
+                decoder.release();
+            } catch (IllegalStateException e) {
+                LimeLog.warning("Ignoring decoder release after codec entered an invalid state: " + e.getMessage());
+            }
+        }
     }
 
     @Override
