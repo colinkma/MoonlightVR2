@@ -882,8 +882,7 @@ void VrMoonlightApp::RenderSpatialVideoToTexture() {
 }
 
 void VrMoonlightApp::UpdateSpatialGaze() {
-  // Keep the control strip in the initial orientation frame so the user can
-  // look down toward it even while the stream window follows the headset.
+  // Use the same window-relative transform for both gaze hit-testing and drawing.
   const Matrix4x4 window_world =
       (window_locked_ ? window_anchor_matrix_ : head_world_matrix_) * model_matrix_;
   // Attach the toolbar to the upper edge of the floating window. The
@@ -946,8 +945,11 @@ void VrMoonlightApp::UpdateSpatialGaze() {
 }
 
 void VrMoonlightApp::DrawSpatialControls(const Matrix4x4& vp) {
+  if (spatial_controls_auto_hide_ && !spatial_controls_visible_) return;
+  const Matrix4x4 window_world =
+      (window_locked_ ? window_anchor_matrix_ : head_world_matrix_) * model_matrix_;
   const Matrix4x4 control_world =
-      toolbar_anchor_matrix_ * GetTranslationMatrix({0.0f, -0.62f, -1.35f}) *
+      window_world * GetTranslationMatrix({0.0f, -1.18f, 0.04f}) *
       GetScaleMatrix({0.75f, 0.50f, 1.0f});
   if(!spatial_ui_program_) return;
   glUseProgram(spatial_ui_program_);
