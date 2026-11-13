@@ -556,11 +556,14 @@ float VrMoonlightApp::OnDrawFrame() {
     ++head_pose_frame_count_;
     if ((head_pose_frame_count_ % 120) == 0) {
       __android_log_print(ANDROID_LOG_INFO, VR_LOG_TAG,
-          "Head pose #%llu q=(%.4f,%.4f,%.4f,%.4f) locked=%d pending=%d",
+          "Head pose #%llu q=(%.4f,%.4f,%.4f,%.4f) locked=%d pending=%d yawFix=%.2fdeg magStatus=%d magAcc=%.3f",
           static_cast<unsigned long long>(head_pose_frame_count_),
           last_head_orientation_.x, last_head_orientation_.y,
           last_head_orientation_.z, last_head_orientation_.w,
-          window_locked_ ? 1 : 0, window_lock_pending_ ? 1 : 0);
+          window_locked_ ? 1 : 0, window_lock_pending_ ? 1 : 0,
+          magnetic_yaw_correction_radians_ * 57.2957795f,
+          magnetic_heading_sensor_accuracy_,
+          magnetic_heading_accuracy_radians_);
     }
 
     // Keep the world anchor as the inverse of the Cardboard NDK sample's
