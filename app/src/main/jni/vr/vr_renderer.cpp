@@ -431,6 +431,8 @@ void VrMoonlightApp::SetDisplayMode(int mode) {
       magnetic_yaw_reference_valid_ = false;
       magnetic_yaw_correction_radians_ = 0.0f;
       last_magnetic_yaw_update_nano_ = 0;
+      magnetic_yaw_stationary_since_nano_ = 0;
+      raw_head_world_valid_ = false;
       toolbar_anchor_valid_ = false;
       spatial_controls_visible_ = true;
       last_spatial_controls_gaze_nano_ = 0;
@@ -585,7 +587,28 @@ float VrMoonlightApp::OnDrawFrame() {
         magnetic_heading_accuracy_radians_ <= 0.35f;
     const float raw_camera_yaw = std::atan2(
         raw_head_world_matrix.m[0][2], raw_head_world_matrix.m[2][2]);
-    if (magnetic_heading_reliable) {
+    float raw_pose_motion = 0.0f;
+    if (raw_head_world_valid_) {
+      for (int row = 0; row < 3; ++row) {
+        for (int col = 0; col < 3; ++col) {
+          raw_pose_motion += std::fabs(
+              raw_head_world_matrix.m[row][col] -
+              previous_raw_head_world_matrix_.m[row][col]);
+        }
+      }
+    } else {
+      raw_head_world_valid_ = true;
+    }
+    previous_raw_head_world_matrix_ = raw_head_world_matrix;
+    if (raw_pose_motion > 0.006f) {
+      magnetic_yaw_stationary_since_nano_ = 0;
+    } else if (magnetic_yaw_stationary_since_nano_ == 0) {
+      magnetic_yaw_stationary_since_nano_ = pose_now_nano;
+    }
+    const bool head_is_stationary =
+        magnetic_yaw_stationary_since_nano_ != 0 &&
+        pose_now_nano - magnetic_yaw_stationary_since_nano_ >= 300000000LL;
+    if (magnetic_heading_reliable && head_is_stationary) {
       if (!magnetic_yaw_reference_valid_) {
         magnetic_heading_reference_radians_ = magnetic_heading_radians_;
         cardboard_yaw_reference_radians_ = raw_camera_yaw;
@@ -1319,6 +1342,8 @@ void VrMoonlightApp::RecenterView() {
   magnetic_yaw_reference_valid_ = false;
   magnetic_yaw_correction_radians_ = 0.0f;
   last_magnetic_yaw_update_nano_ = 0;
+  magnetic_yaw_stationary_since_nano_ = 0;
+  raw_head_world_valid_ = false;
   recenter_dwell_seconds_ = 0.0f;
   last_recenter_frame_nano_ = 0;
   recenter_action_armed_ = true;
