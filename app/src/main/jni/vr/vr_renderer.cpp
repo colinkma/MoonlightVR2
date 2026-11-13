@@ -535,6 +535,18 @@ float VrMoonlightApp::OnDrawFrame() {
     head_world_matrix_.m[0][3] = 0.0f;
     head_world_matrix_.m[1][3] = 0.0f;
     head_world_matrix_.m[2][3] = 0.0f;
+    float reticle_motion = 0.0f;
+    if (reticle_head_pose_valid_) {
+      for (int row=0; row<3; ++row)
+        for (int col=0; col<3; ++col)
+          reticle_motion += std::fabs(head_world_matrix_.m[row][col] -
+                                      previous_reticle_head_matrix_.m[row][col]);
+      if (reticle_motion > 0.004f) reticle_last_motion_nano_ = GetBootTimeNano();
+    } else {
+      reticle_last_motion_nano_ = GetBootTimeNano();
+      reticle_head_pose_valid_ = true;
+    }
+    previous_reticle_head_matrix_ = head_world_matrix_;
     head_pose_valid_ = true;
     if (!toolbar_anchor_valid_) {
       toolbar_anchor_matrix_ = head_world_matrix_;
@@ -1066,7 +1078,7 @@ void VrMoonlightApp::UpdateSpatialGaze() {
       float motion=0.f;
       for(int row=0;row<3;++row) for(int col=0;col<3;++col)
         motion+=std::fabs(head_world_matrix_.m[row][col]-drag_start_head_matrix_.m[row][col]);
-      if(motion>0.025f) {
+      if(motion>0.004f) {
         window_anchor_matrix_=moved;
         drag_start_head_matrix_=head_world_matrix_;
         drag_start_window_matrix_=moved;
@@ -1131,40 +1143,53 @@ void VrMoonlightApp::DrawSpatialControls(const Matrix4x4& vp) {
 
   }
 
-  // One clockwise progress ring around the reticle communicates every
-  // dwell action; toolbar glyphs remain static.
-  const float reticle_color[] = {0.78f, 0.84f, 0.92f, 0.95f};
+  // Minimal gaze marker: a small dim point appears only while the
+  // user's head is moving. Dwell progress is a fine clockwise arc around it.
+  const int64_t reticle_now = GetBootTimeNano();
+  const bool reticle_visible = reticle_last_motion_nano_ != 0 &&
+      reticle_now - reticle_last_motion_nano_ < 1200000000LL;
   float progress=0.f;
   if (recenter_dwell_seconds_>0.f)
     progress=std::clamp(recenter_dwell_seconds_/kRecenterDwellSeconds,0.f,1.f);
   else if (window_dragging_)
-    progress=std::clamp(static_cast<float>(GetBootTimeNano()-window_last_motion_nano_)/1.0e9f,0.f,1.f);
+    progress=std::clamp(static_cast<float>(reticle_now-window_last_motion_nano_)/1.0e9f,0.f,1.f);
   else if (window_edit_mode_&&!window_dragging_&&window_select_dwell_seconds_>0.f)
     progress=std::clamp(window_select_dwell_seconds_/kWindowSelectDwellSeconds,0.f,1.f);
   else if (gaze_target_>=0&&gaze_action_armed_)
     progress=std::clamp(gaze_dwell_seconds_/kGazeDwellSeconds,0.f,1.f);
 
-  const Matrix4x4 reticle_pose = GetTranslationMatrix({0.0f, 0.0f, -1.35f});
-  constexpr int kRingSegments=48;
-  const int visible_segments=progress>0.f
-      ? std::max(1,static_cast<int>(std::ceil(progress*kRingSegments)))
-      : kRingSegments;
-  for(int i=0;i<visible_segments;++i) {
-    const float angle=-1.57079632679f-
-        (6.28318530718f*static_cast<float>(i)/kRingSegments);
-    Matrix4x4 rotate;
-    for(int row=0;row<4;++row)
-      for(int col=0;col<4;++col)
-        rotate.m[row][col]=(row==col)?1.f:0.f;
-    rotate.m[0][0]=std::cos(angle); rotate.m[0][1]=-std::sin(angle);
-    rotate.m[1][0]=std::sin(angle); rotate.m[1][1]=std::cos(angle);
-    const Matrix4x4 segment =
-        GetTranslationMatrix({0.034f*std::cos(angle),0.034f*std::sin(angle),0.f}) *
-        rotate * GetScaleMatrix({0.0035f,0.008f,1.f});
-    const auto ring_mvp=(vp*head_world_matrix_*reticle_pose*segment).ToGlArray();
-    glUniformMatrix4fv(spatial_ui_mvp_uniform_,1,GL_FALSE,ring_mvp.data());
-    glUniform4fv(spatial_ui_color_uniform_,1,reticle_color);
-    glDrawArrays(GL_TRIANGLES,0,6);
+  if (reticle_visible || progress > 0.f) {
+    const Matrix4x4 reticle_pose = GetTranslationMatrix({0.0f, 0.0f, -1.35f});
+    const float point_color[] = {0.10f, 0.12f, 0.15f, 0.82f};
+    const float ring_color[] = {0.30f, 0.34f, 0.39f, 0.88f};
+    if (reticle_visible) {
+      const Matrix4x4 dot = GetScaleMatrix({0.0028f, 0.0028f, 1.f});
+      const auto dot_mvp=(vp*head_world_matrix_*reticle_pose*dot).ToGlArray();
+      glUniformMatrix4fv(spatial_ui_mvp_uniform_,1,GL_FALSE,dot_mvp.data());
+      glUniform4fv(spatial_ui_color_uniform_,1,point_color);
+      glDrawArrays(GL_TRIANGLES,0,6);
+    }
+    if (progress > 0.f) {
+      constexpr int kRingSegments=48;
+      const int visible_segments=std::max(1,static_cast<int>(std::ceil(progress*kRingSegments)));
+      for(int i=0;i<visible_segments;++i) {
+        const float angle=-1.57079632679f-
+            (6.28318530718f*static_cast<float>(i)/kRingSegments);
+        Matrix4x4 rotate;
+        for(int row=0;row<4;++row)
+          for(int col=0;col<4;++col)
+            rotate.m[row][col]=(row==col)?1.f:0.f;
+        rotate.m[0][0]=std::cos(angle); rotate.m[0][1]=-std::sin(angle);
+        rotate.m[1][0]=std::sin(angle); rotate.m[1][1]=std::cos(angle);
+        const Matrix4x4 segment =
+            GetTranslationMatrix({0.0085f*std::cos(angle),0.0085f*std::sin(angle),0.f}) *
+            rotate * GetScaleMatrix({0.0008f,0.0022f,1.f});
+        const auto ring_mvp=(vp*head_world_matrix_*reticle_pose*segment).ToGlArray();
+        glUniformMatrix4fv(spatial_ui_mvp_uniform_,1,GL_FALSE,ring_mvp.data());
+        glUniform4fv(spatial_ui_color_uniform_,1,ring_color);
+        glDrawArrays(GL_TRIANGLES,0,6);
+      }
+    }
   }
   glDisableVertexAttribArray(spatial_ui_pos_attrib_);
 }
