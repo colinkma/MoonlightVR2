@@ -1341,35 +1341,38 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
 
     @Override
     public void stop() {
-        // May be called already, but we'll call it now to be safe
+        // May be called already, but we'll call it now to be safe.
         prepareForStop();
 
-        // Wait for the Choreographer looper to shut down (if we have one)
+        // Do not release MediaCodec while either consumer thread can still touch
+        // it. Complete the joins even if the caller is interrupted, then restore
+        // the interrupt status once teardown is safe.
+        boolean interrupted = false;
         if (choreographerHandlerThread != null) {
-            try {
-                choreographerHandlerThread.join();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-
-                // InterruptedException clears the thread's interrupt status. Since we can't
-                // handle that here, we will re-interrupt the thread to set the interrupt
-                // status back to true.
-                Thread.currentThread().interrupt();
+            while (choreographerHandlerThread.isAlive()) {
+                try {
+                    choreographerHandlerThread.join();
+                } catch (InterruptedException e) {
+                    interrupted = true;
+                }
             }
+            choreographerHandlerThread = null;
+            choreographerHandler = null;
         }
 
-        // Wait for the renderer thread to shut down. setup()/start() may fail
-        // before this thread is created, so teardown must also be safe in that case.
         if (rendererThread != null) {
-            try {
-                rendererThread.join();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-
-                // InterruptedException clears the interrupt status; restore it.
-                Thread.currentThread().interrupt();
+            while (rendererThread.isAlive()) {
+                try {
+                    rendererThread.join();
+                } catch (InterruptedException e) {
+                    interrupted = true;
+                }
             }
             rendererThread = null;
+        }
+
+        if (interrupted) {
+            Thread.currentThread().interrupt();
         }
     }
 
