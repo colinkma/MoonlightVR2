@@ -1,10 +1,8 @@
 name: Build MoonlightVR
 
-# Temporary push trigger for the corrected release publication.
+# Builds are intentionally manual during development.
+# Run only after the complete spatial UI and gaze interaction pass review.
 on:
-  push:
-    branches:
-      - feature/spatial-window-camera
   workflow_dispatch:
 
 jobs:
