@@ -349,7 +349,9 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     }
 
     public void recenterView() {
-        nativeRecenterView(nativeHandle);
+        // Tracker recenter mutates the same native state read by the GL thread.
+        // Serialize it with pose sampling to avoid a data race and mixed frames.
+        glSurfaceView.queueEvent(() -> nativeRecenterView(nativeHandle));
     }
 
     public void setLensScale(float scale) {
