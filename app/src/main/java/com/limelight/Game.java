@@ -168,7 +168,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     private volatile boolean vrHeadLookingDown = false;
     private boolean vrCameraPermissionRequested = false;
     private volatile boolean vrCameraStartQueued = false;
-    private int vrCameraRequestGeneration = 0;
+    private volatile int vrCameraRequestGeneration = 0;
     private float vrSpatialScreenDistanceMeters = 2.0f;
     private final VrRenderer.SurfaceListener vrSurfaceListener = new VrRenderer.SurfaceListener() {
         @Override
