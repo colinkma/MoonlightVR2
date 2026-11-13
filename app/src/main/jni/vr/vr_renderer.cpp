@@ -418,6 +418,12 @@ void VrMoonlightApp::SetDisplayMode(int mode) {
       // captures the anchor on the GL thread without a one-frame jump.
       window_locked_ = true;
       window_lock_pending_ = true;
+      window_edit_mode_ = false;
+      window_dragging_ = false;
+      window_select_dwell_seconds_ = 0.f;
+      window_select_armed_ = true;
+      recenter_dwell_seconds_ = 0.f;
+      recenter_action_armed_ = true;
       CardboardHeadTracker_resume(head_tracker_);
     } else {
       display_mode_ = 0;
@@ -428,6 +434,8 @@ void VrMoonlightApp::SetDisplayMode(int mode) {
   } else {
     display_mode_ = 0;
     toolbar_anchor_valid_ = false;
+    window_edit_mode_ = false;
+    window_dragging_ = false;
     if (head_tracker_ != nullptr) {
       CardboardHeadTracker_pause(head_tracker_);
     }
@@ -1136,7 +1144,9 @@ void VrMoonlightApp::DrawSpatialControls(const Matrix4x4& vp) {
     const float angle=-1.57079632679f-
         (6.28318530718f*static_cast<float>(i)/kRingSegments);
     Matrix4x4 rotate;
-    for(int k=0;k<4;++k) rotate.m[k][k]=1.f;
+    for(int row=0;row<4;++row)
+      for(int col=0;col<4;++col)
+        rotate.m[row][col]=(row==col)?1.f:0.f;
     rotate.m[0][0]=std::cos(angle); rotate.m[0][1]=-std::sin(angle);
     rotate.m[1][0]=std::sin(angle); rotate.m[1][1]=std::cos(angle);
     const Matrix4x4 segment =
