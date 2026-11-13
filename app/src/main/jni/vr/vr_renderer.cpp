@@ -509,8 +509,14 @@ float VrMoonlightApp::OnDrawFrame() {
           window_locked_ ? 1 : 0, window_lock_pending_ ? 1 : 0);
     }
 
-    // Keep the headset pose purely rotational for this 3DoF renderer.
-    head_world_matrix_ = last_head_orientation_.ToMatrix();
+    // Cardboard's quaternion is the head-view rotation (world-to-head).
+    // The floating screen anchor needs the inverse, head-to-world rotation.
+    // Keep these two transforms paired so returning to the same pose returns
+    // the window to exactly the same world position.
+    const Quatf camera_to_world(
+        -last_head_orientation_.x, -last_head_orientation_.y,
+        -last_head_orientation_.z, last_head_orientation_.w);
+    head_world_matrix_ = camera_to_world.ToMatrix();
     head_world_matrix_.m[0][3] = 0.0f;
     head_world_matrix_.m[1][3] = 0.0f;
     head_world_matrix_.m[2][3] = 0.0f;
@@ -524,10 +530,8 @@ float VrMoonlightApp::OnDrawFrame() {
       window_lock_pending_ = false;
     }
 
-    // In the Cardboard world frame, +Y is up and the head looks down -Z.
-    // A positive X pitch rotates the forward vector toward -Y.
-    // The camera's forward vector is -Z in local space; its world-space
-    // vertical component is -R[1][2]. Positive values mean looking down.
+    // The camera-to-world matrix maps the local -Z gaze ray into world space.
+    // With this Cardboard pose convention, negative pitch means looking down.
     const float sin_pitch = std::clamp(-head_world_matrix_.m[1][2], -1.0f, 1.0f);
     head_pitch_degrees_ = std::asin(sin_pitch) * 180.0f /
                           3.14159265358979323846f;
