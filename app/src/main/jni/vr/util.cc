@@ -98,15 +98,18 @@ Matrix4x4 Quatf::ToMatrix() const {
   const float zw = 2.0f * z * w;
 
   out.m[0][0] = 1 - yy - zz;
-  out.m[0][1] = xy + zw;
-  out.m[0][2] = xz - yw;
+  // This renderer uses column vectors and column-major OpenGL uploads.
+  // Use the camera-to-world rotation convention here; GetViewMatrixFromPose()
+  // transposes this 3x3 block to obtain the inverse (world-to-camera) view.
+  out.m[0][1] = xy - zw;
+  out.m[0][2] = xz + yw;
   out.m[0][3] = 0.0f;
-  out.m[1][0] = xy - zw;
+  out.m[1][0] = xy + zw;
   out.m[1][1] = 1 - xx - zz;
-  out.m[1][2] = yz + xw;
+  out.m[1][2] = yz - xw;
   out.m[1][3] = 0.0f;
-  out.m[2][0] = xz + yw;
-  out.m[2][1] = yz - xw;
+  out.m[2][0] = xz - yw;
+  out.m[2][1] = yz + xw;
   out.m[2][2] = 1 - xx - yy;
   out.m[2][3] = 0.0f;
   out.m[3][0] = 0.0f;
