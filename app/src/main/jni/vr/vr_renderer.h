@@ -52,6 +52,7 @@ class VrMoonlightApp {
   void SetCameraTexture(GLuint textureId);
   void SetCameraTextureTransform(const float* transform);
   void SetCameraEnabled(bool enabled);
+  void SetSpatialControlsAutoHide(bool enabled);
   float GetCurvatureAmount() const;
   float GetHorizontalCurvature() const;
   float GetVerticalCurvature() const;
@@ -117,6 +118,9 @@ class VrMoonlightApp {
   float gaze_dwell_seconds_ = 0.0f;
   int64_t last_gaze_frame_nano_ = 0;
   bool gaze_action_armed_ = true;
+  bool spatial_controls_auto_hide_ = true;
+  bool spatial_controls_visible_ = true;
+  int64_t last_spatial_controls_gaze_nano_ = 0;
   GLuint video_texture_;
   GLuint render_texture_;
   GLuint framebuffer_;
