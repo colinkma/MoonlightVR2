@@ -30,6 +30,7 @@ public class VrCameraManager {
     private Handler cameraHandler;
     private volatile boolean isStarted = false;
     private volatile boolean isOpening = false;
+    private volatile Runnable onStartedListener;
 
     public VrCameraManager(Context context) {
         this.context = context;
@@ -39,7 +40,7 @@ public class VrCameraManager {
         return isStarted || isOpening;
     }
 
-    public synchronized void startCamera(Surface surface) {
+    public synchronized void startCamera(Surface surface, Runnable onStartedListener) {
         if (isStarted || isOpening) {
             Log.w(TAG, "Camera already started");
             return;
@@ -53,6 +54,7 @@ public class VrCameraManager {
         }
 
         isOpening = true;
+        this.onStartedListener = onStartedListener;
         cameraSurface = surface;
         cameraManager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
 
@@ -173,6 +175,11 @@ public class VrCameraManager {
             isStarted = true;
             isOpening = false;
             Log.i(TAG, "Camera preview started");
+            Runnable listener = onStartedListener;
+            onStartedListener = null;
+            if (listener != null) {
+                listener.run();
+            }
         } catch (CameraAccessException | IllegalStateException e) {
             Log.e(TAG, "Failed to start preview", e);
             stopCamera();
@@ -182,6 +189,7 @@ public class VrCameraManager {
     public synchronized void stopCamera() {
         isStarted = false;
         isOpening = false;
+        onStartedListener = null;
         if (captureSession != null) {
             try {
                 captureSession.stopRepeating();
