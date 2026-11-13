@@ -524,13 +524,9 @@ float VrMoonlightApp::OnDrawFrame() {
           window_locked_ ? 1 : 0, window_lock_pending_ ? 1 : 0);
     }
 
-    // Cardboard's returned quaternion is the head_view rotation (the
-    // world-to-camera transform), as used by Google's NDK sample. The
-    // camera-to-world transform used for world anchors, gaze and reticle is
-    // therefore its conjugate/inverse.
-    // Cardboard returns the camera pose in world coordinates. Keep that
-    // camera-to-world transform for anchors and gaze; only the view matrix
-    // uses its inverse (GetViewMatrixFromPose).
+    // Cardboard returns the camera pose in world coordinates. Keep this
+    // camera-to-world transform for anchors, gaze and the reticle; the view
+    // matrix uses its inverse in GetViewMatrixFromPose().
     head_world_matrix_ = last_head_orientation_.ToMatrix();
     head_world_matrix_.m[0][3] = 0.0f;
     head_world_matrix_.m[1][3] = 0.0f;
