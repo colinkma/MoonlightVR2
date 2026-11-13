@@ -66,7 +66,7 @@
             seekbar:min="10"
             android:max="40"
             seekbar:step="1"
-            android:defaultValue="28"
+            android:defaultValue="20"
             android:summary="@string/summary_seekbar_vr_screen_distance"
             android:text="@string/suffix_seekbar_vr_distance"
             android:title="@string/title_seekbar_vr_screen_distance" />
