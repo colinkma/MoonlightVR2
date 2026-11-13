@@ -128,7 +128,7 @@ public class PreferenceConfiguration {
     private static final boolean DEFAULT_GAMEPAD_TOUCHPAD_AS_MOUSE = false;
     private static final boolean DEFAULT_GAMEPAD_MOTION_SENSORS = true;
     private static final boolean DEFAULT_GAMEPAD_MOTION_FALLBACK = false;
-    private static final int DEFAULT_VR_SCREEN_DISTANCE_INT = 20;
+    private static final int DEFAULT_VR_SCREEN_DISTANCE_INT = 28;
     private static final int DEFAULT_VR_LENS_DISTORTION_STRENGTH_INT = 70;
     private static final int DEFAULT_VR_SCREEN_SIZE_INT = 50;
     private static final int DEFAULT_VR_CURVATURE_MODE_INT = 0;
