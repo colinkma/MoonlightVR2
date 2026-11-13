@@ -440,7 +440,7 @@ void VrMoonlightApp::SetDisplayMode(int mode) {
       // captures the anchor on the GL thread without a one-frame jump.
       window_locked_ = true;
       window_lock_pending_ = true;
-      recenter_anchor_yaw_only_pending_ = true;
+      recenter_anchor_yaw_only_pending_ = false;
       window_edit_mode_ = false;
       window_dragging_ = false;
       window_select_dwell_seconds_ = 0.f;
@@ -1140,6 +1140,7 @@ void VrMoonlightApp::UpdateSpatialGaze() {
       toolbar_anchor_valid_ = false;
       window_locked_ = true;
       window_lock_pending_ = true;
+      recenter_anchor_yaw_only_pending_ = true;
       window_edit_mode_ = false;
       window_dragging_ = false;
       window_select_dwell_seconds_ = 0.0f;
