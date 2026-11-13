@@ -22,15 +22,6 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Validate release publishing credential
-        env:
-          GH_RELEASE_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
-        run: |
-          if [[ -z "$GH_RELEASE_TOKEN" ]]; then
-            echo "::error::GH_RELEASE_TOKEN is not configured. The previous GITHUB_TOKEN release upload was rejected with HTTP 403."
-            exit 1
-          fi
-
       - name: Set up JDK 21
         uses: actions/setup-java@v5
         with:
@@ -111,12 +102,18 @@ jobs:
 
       - name: Publish APK as a direct GitHub Release asset
         env:
-          GH_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "vrmode-${BUILD_LABEL}" "$APK_NAME" \
-            --target "$GITHUB_SHA" \
+          RELEASE_TAG="vrmode-${BUILD_LABEL}"
+          # Remove an unpushed local tag left by an earlier failed release attempt.
+          git tag -d "$RELEASE_TAG" 2>/dev/null || true
+          # GITHUB_TOKEN cannot create a release tag at a commit whose workflow
+          # files differ from the default branch. Anchor the release tag to main;
+          # the release notes identify the exact feature-branch source commit.
+          gh release create "$RELEASE_TAG" "$APK_NAME" \
+            --target "main" \
             --title "MoonlightVR ${BUILD_LABEL}" \
-            --notes "Signed Android release APK. App version: ${BUILD_LABEL}. Download the APK directly." \
+            --notes "Signed Android release APK. App version: ${BUILD_LABEL}. APK source branch: ${GITHUB_REF_NAME}. APK source commit: ${GITHUB_SHA}. Download the APK directly." \
             --prerelease
 
       - name: Summary
