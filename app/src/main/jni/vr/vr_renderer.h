@@ -100,6 +100,7 @@ class VrMoonlightApp {
   Matrix4x4 toolbar_anchor_matrix_;
   bool toolbar_anchor_valid_ = false;
   float head_pitch_degrees_ = 0.0f;
+  uint64_t head_pose_frame_count_ = 0;
   bool device_params_changed_;
   int screen_width_;
   int screen_height_;
