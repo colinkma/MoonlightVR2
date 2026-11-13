@@ -217,7 +217,10 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     public void onResume() {
         LimeLog.info("VrRenderer.onResume");
         glSurfaceView.onResume();
-        nativeOnResume(nativeHandle);
+        // Keep Cardboard tracker state changes on the same GL thread that reads
+        // its pose every frame. Calling pause/resume from the Activity thread
+        // races nativeOnDrawFrame during fast Activity transitions.
+        glSurfaceView.queueEvent(() -> nativeOnResume(nativeHandle));
     }
 
     public void onPause() {
@@ -229,7 +232,9 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
                 listener.onHeadPitchChanged(false);
             }
         }
-        nativeOnPause(nativeHandle);
+        // Queue the tracker pause before pausing the GL thread so no pose query
+        // can overlap a tracker lifecycle transition.
+        glSurfaceView.queueEvent(() -> nativeOnPause(nativeHandle));
         glSurfaceView.onPause();
     }
 
