@@ -61,7 +61,7 @@
             android:defaultValue="true" />
         <com.limelight.preferences.SeekBarPreference
             android:key="seekbar_vr_screen_distance"
-            android:dependency="checkbox_enable_vr_spatial_mode"
+            android:dependency="checkbox_enable_vr"
             android:dialogMessage="@string/summary_seekbar_vr_screen_distance"
             seekbar:min="10"
             android:max="40"
