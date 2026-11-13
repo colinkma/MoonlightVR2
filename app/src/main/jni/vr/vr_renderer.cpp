@@ -584,6 +584,7 @@ float VrMoonlightApp::OnDrawFrame() {
         pose_now_nano - magnetic_heading_timestamp_nano_ <= 750000000LL &&
         magnetic_heading_sensor_accuracy_ >= 2 &&
         std::isfinite(magnetic_heading_accuracy_radians_) &&
+        magnetic_heading_accuracy_radians_ >= 0.0f &&
         magnetic_heading_accuracy_radians_ <= 0.35f;
     const float raw_camera_yaw = std::atan2(
         raw_head_world_matrix.m[0][2], raw_head_world_matrix.m[2][2]);
