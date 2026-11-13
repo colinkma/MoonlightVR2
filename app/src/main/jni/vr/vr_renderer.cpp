@@ -473,13 +473,36 @@ float VrMoonlightApp::OnDrawFrame() {
     float orientation[4] = {0.0f, 0.0f, 0.0f, 1.0f};
     CardboardHeadTracker_getPose(head_tracker_, GetBootTimeNano(),
                                  viewport_orientation_, position, orientation);
-    // Cardboard provides reliable 3DoF orientation, but its reported
-    // translation is not a room-tracked 6DoF position. Do not feed that
-    // value into the world anchor: noisy translation makes a locked window
-    // drift or jitter while the user turns their head.
+
+    // Reject invalid sensor samples rather than allowing a zero/NaN quaternion
+    // to poison the view and world-anchor matrices.
+    const float orientation_norm_sq =
+        orientation[0] * orientation[0] + orientation[1] * orientation[1] +
+        orientation[2] * orientation[2] + orientation[3] * orientation[3];
+    if (!std::isfinite(orientation_norm_sq) || orientation_norm_sq < 1.0e-8f) {
+      if (!head_pose_valid_) {
+        return head_pitch_degrees_;
+      }
+      VR_LOGE("Cardboard returned invalid head pose quaternion");
+    } else {
+      const float inverse_norm = 1.0f / std::sqrt(orientation_norm_sq);
+      last_head_orientation_ = Quatf(
+          orientation[0] * inverse_norm, orientation[1] * inverse_norm,
+          orientation[2] * inverse_norm, orientation[3] * inverse_norm);
+    }
+
+    // Cardboard provides 3DoF orientation, but its translation is not a
+    // room-tracked 6DoF position. Keep the anchor rotational to avoid drift.
     last_head_position_ = {0.0f, 0.0f, 0.0f};
-    last_head_orientation_ = Quatf(orientation[0], orientation[1],
-                                   orientation[2], orientation[3]);
+    ++head_pose_frame_count_;
+    if ((head_pose_frame_count_ % 120) == 0) {
+      __android_log_print(ANDROID_LOG_INFO, VR_LOG_TAG,
+          "Head pose #%llu q=(%.4f,%.4f,%.4f,%.4f) locked=%d pending=%d",
+          static_cast<unsigned long long>(head_pose_frame_count_),
+          last_head_orientation_.x, last_head_orientation_.y,
+          last_head_orientation_.z, last_head_orientation_.w,
+          window_locked_ ? 1 : 0, window_lock_pending_ ? 1 : 0);
+    }
 
     // Keep the headset pose purely rotational for this 3DoF renderer.
     head_world_matrix_ = last_head_orientation_.ToMatrix();
