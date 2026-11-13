@@ -57,7 +57,7 @@ jobs:
           echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/moonlightvr-ci.keystore"
           keytool -list -v -keystore "$RUNNER_TEMP/moonlightvr-ci.keystore" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" | grep -m 1 "SHA256:"
 
-      - name: Build debug APK
+      - name: Build release APK
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -77,11 +77,11 @@ jobs:
             GRADLE_OPTS="$GRADLE_OPTS -PMOONLIGHTVR_KEY_PASSWORD=$ANDROID_KEY_PASSWORD"
           fi
 
-          ./gradlew :app:assembleVrModeDebug $GRADLE_OPTS --no-daemon
+          ./gradlew :app:assembleVrModeRelease $GRADLE_OPTS --no-daemon
 
       - name: Rename APK with metadata
         run: |
-          BUILD_TYPE="debug"
+          BUILD_TYPE="release"
           BUILD_LABEL="${{ steps.version.outputs.BUILD_LABEL }}"
           SHA_SHORT=$(echo ${{ github.sha }} | cut -c1-8)
           APK_PATH="app/build/outputs/apk/vrMode/${BUILD_TYPE,,}/app-vrMode-${BUILD_TYPE,,}.apk"
@@ -102,8 +102,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "vrmode-${BUILD_LABEL}" "$APK_NAME" \
-            --title "MoonlightVR 固定画面版 ${BUILD_LABEL}" \
-            --notes "固定画面 VR 模式 APK。可直接下载 APK 文件安装。" \
+            --title "MoonlightVR VR 空间定位修正版 ${BUILD_LABEL}" \
+            --notes "Signed Android release APK. Includes Cardboard pose-axis correction, viewport synchronization, and camera startup cancellation fixes. Download the APK directly." \
             --prerelease
 
       - name: Summary
@@ -116,7 +116,7 @@ jobs:
           echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| Branch | $BRANCH_NAME |" >> $GITHUB_STEP_SUMMARY
           echo "| Flavor | vrMode |" >> $GITHUB_STEP_SUMMARY
-          echo "| Build Type | debug |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build Type | release |" >> $GITHUB_STEP_SUMMARY
           echo "| App Version | ${{ steps.version.outputs.VERSION_NAME }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Build Date (Asia/Shanghai) | ${{ steps.version.outputs.BUILD_DATE }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Build | ${BUILD_LABEL:-unknown} |" >> $GITHUB_STEP_SUMMARY
