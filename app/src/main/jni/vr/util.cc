@@ -153,31 +153,11 @@ Matrix4x4 GetScaleMatrix(const std::array<float, 3>& scale) {
 
 Matrix4x4 GetViewMatrixFromPose(const std::array<float, 3>& translation,
                                 const Quatf& orientation) {
-  Matrix4x4 rotation = orientation.ToMatrix();
-  Matrix4x4 view;
-  for (int i = 0; i < 4; ++i) {
-    view.m[i][i] = 1.0f;
-  }
-
-  // Transpose rotation component to invert orientation.
-  for (int row = 0; row < 3; ++row) {
-    for (int col = 0; col < 3; ++col) {
-      view.m[row][col] = rotation.m[col][row];
-    }
-  }
-
-  // Compute translated camera position.
-  view.m[0][3] = -(view.m[0][0] * translation[0] +
-                  view.m[0][1] * translation[1] +
-                  view.m[0][2] * translation[2]);
-  view.m[1][3] = -(view.m[1][0] * translation[0] +
-                  view.m[1][1] * translation[1] +
-                  view.m[1][2] * translation[2]);
-  view.m[2][3] = -(view.m[2][0] * translation[0] +
-                  view.m[2][1] * translation[1] +
-                  view.m[2][2] * translation[2]);
-
-  return view;
+  // Cardboard's head-tracker quaternion is the head-view rotation used by
+  // the official NDK sample. Keep this matrix in the same convention:
+  // view = translation * rotation. The inverse rotation is used separately
+  // when storing a world-space window anchor.
+  return GetTranslationMatrix(translation) * orientation.ToMatrix();
 }
 
 float AngleBetweenVectors(const std::array<float, 4>& vec1,
