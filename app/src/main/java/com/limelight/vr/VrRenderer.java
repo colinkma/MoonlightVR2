@@ -1,5 +1,6 @@
 package com.limelight.vr;
 
+import android.app.Activity;
 import android.content.Context;
 import android.content.res.AssetManager;
 import android.graphics.SurfaceTexture;
@@ -44,6 +45,7 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     private HeadPitchListener headPitchListener;
     private volatile boolean lookingDownForCamera = false;
 
+    private final Context context;
     private final GLSurfaceView glSurfaceView;
     private final SurfaceListener surfaceListener;
     private final long nativeHandle;
@@ -140,6 +142,7 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     }
 
     public VrRenderer(Context context, GLSurfaceView glSurfaceView, SurfaceListener surfaceListener) {
+        this.context = context;
         this.glSurfaceView = glSurfaceView;
         this.surfaceListener = surfaceListener;
         this.nativeHandle = nativeCreate(context, context.getAssets());
@@ -168,6 +171,13 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     @Override
     public void onSurfaceChanged(GL10 gl10, int width, int height) {
         LimeLog.info("VrRenderer.onSurfaceChanged: width=" + width + " height=" + height);
+        // The Activity may switch from portrait to landscape after this view is
+        // created. Read the actual display rotation on the GL thread so the
+        // first captured world anchor always uses the live viewport frame.
+        if (context instanceof Activity) {
+            int rotation = ((Activity) context).getWindowManager().getDefaultDisplay().getRotation();
+            nativeSetViewportOrientation(nativeHandle, rotation);
+        }
         nativeOnSurfaceChanged(nativeHandle, width, height);
     }
 
