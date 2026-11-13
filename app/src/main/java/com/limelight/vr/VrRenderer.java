@@ -451,6 +451,8 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     }
 
     public void setViewportOrientation(final int rotation) {
+        // Keep Java-side sensor remapping in sync with Cardboard's viewport.
+        viewportRotation = rotation;
         glSurfaceView.queueEvent(() -> nativeSetViewportOrientation(nativeHandle, rotation));
     }
 
