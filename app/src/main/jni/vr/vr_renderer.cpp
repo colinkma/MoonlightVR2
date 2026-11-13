@@ -687,8 +687,9 @@ float VrMoonlightApp::OnDrawFrame() {
         const float anchor_yaw = std::atan2(
             head_world_matrix_.m[0][2], head_world_matrix_.m[2][2]);
         window_anchor_matrix_ = MakeYawRotation(anchor_yaw) *
-            GetTranslationMatrix({0.0f, -0.07f, 0.0f});
+            GetTranslationMatrix({0.0f, recenter_anchor_vertical_offset_m_, 0.0f});
         recenter_anchor_yaw_only_pending_ = false;
+        recenter_anchor_vertical_offset_m_ = -0.07f;
       } else {
         window_anchor_matrix_ = head_world_matrix_;
       }
@@ -1141,6 +1142,7 @@ void VrMoonlightApp::UpdateSpatialGaze() {
       window_locked_ = true;
       window_lock_pending_ = true;
       recenter_anchor_yaw_only_pending_ = true;
+      recenter_anchor_vertical_offset_m_ = -0.07f;
       window_edit_mode_ = false;
       window_dragging_ = false;
       window_select_dwell_seconds_ = 0.0f;
@@ -1396,6 +1398,7 @@ void VrMoonlightApp::RecenterView() {
     window_dragging_ = false;
     window_lock_pending_ = true;
     recenter_anchor_yaw_only_pending_ = true;
+    recenter_anchor_vertical_offset_m_ = 0.0f;
   }
 }
 
