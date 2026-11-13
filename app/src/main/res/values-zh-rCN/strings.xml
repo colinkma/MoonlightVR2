@@ -305,7 +305,7 @@
     <string name="title_checkbox_enable_vr_camera_pip">启用摄像头画中画</string>
     <string name="summary_checkbox_enable_vr_camera_pip">在 VR 模式中显示后置摄像头画面（当前固定分屏模式不使用此功能）</string>
     <string name="title_seekbar_vr_screen_distance">虚拟屏幕距离</string>
-    <string name="summary_seekbar_vr_screen_distance">调整虚拟屏幕与眼睛之间的距离（当前固定分屏模式不使用此功能）</string>
+    <string name="summary_seekbar_vr_screen_distance">在三维悬浮屏幕模式下调整虚拟屏幕与眼睛之间的距离。建议从 2.8 米开始，再按舒适度微调。</string>
     <string name="suffix_seekbar_vr_distance">米</string>
     <string name="title_seekbar_vr_screen_size">虚拟屏幕大小</string>
     <string name="summary_seekbar_vr_screen_size">调整虚拟屏幕大小（当前固定分屏模式不使用此功能）</string>
