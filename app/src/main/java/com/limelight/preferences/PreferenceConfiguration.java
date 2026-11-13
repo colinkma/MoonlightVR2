@@ -84,10 +84,11 @@ public class PreferenceConfiguration {
     public static final String VR_ENABLE_CAMERA_PIP_PREF_STRING = "checkbox_enable_vr_camera_pip";
     public static final String VR_SPATIAL_MODE_PREF_STRING = "checkbox_enable_vr_spatial_mode";
     public static final String VR_CAMERA_PASSTHROUGH_PREF_STRING = "checkbox_enable_vr_camera_passthrough";
+    public static final String VR_CONTROLS_AUTO_HIDE_PREF_STRING = "checkbox_vr_controls_auto_hide";
     public static final float DEFAULT_VR_LENS_SCALE = 1.0f;
 
-    static final String DEFAULT_RESOLUTION = "1280x720";
-    static final String DEFAULT_FPS = "60";
+    static final String DEFAULT_RESOLUTION = "1920x1080";
+    static final String DEFAULT_FPS = "120";
     private static final boolean DEFAULT_STRETCH = false;
     private static final boolean DEFAULT_SOPS = true;
     private static final boolean DEFAULT_DISABLE_TOASTS = false;
@@ -203,6 +204,7 @@ public class PreferenceConfiguration {
     public boolean enableVrCameraPip;
     public boolean enableVrSpatialMode;
     public boolean enableVrCameraPassthrough;
+    public boolean vrControlsAutoHide;
 
     public static boolean isNativeResolution(int width, int height) {
         // It's not a native resolution if it matches an existing resolution option
@@ -658,6 +660,7 @@ public class PreferenceConfiguration {
         config.enableVrCameraPip = prefs.getBoolean(VR_ENABLE_CAMERA_PIP_PREF_STRING, DEFAULT_ENABLE_VR_CAMERA_PIP);
         config.enableVrSpatialMode = prefs.getBoolean(VR_SPATIAL_MODE_PREF_STRING, DEFAULT_ENABLE_VR_SPATIAL_MODE);
         config.enableVrCameraPassthrough = prefs.getBoolean(VR_CAMERA_PASSTHROUGH_PREF_STRING, DEFAULT_ENABLE_VR_CAMERA_PASSTHROUGH);
+        config.vrControlsAutoHide = prefs.getBoolean(VR_CONTROLS_AUTO_HIDE_PREF_STRING, true);
         config.enablePip = prefs.getBoolean(ENABLE_PIP_PREF_STRING, DEFAULT_ENABLE_PIP);
         config.enablePerfOverlay = prefs.getBoolean(ENABLE_PERF_OVERLAY_STRING, DEFAULT_ENABLE_PERF_OVERLAY);
         config.bindAllUsb = prefs.getBoolean(BIND_ALL_USB_STRING, DEFAULT_BIND_ALL_USB);
