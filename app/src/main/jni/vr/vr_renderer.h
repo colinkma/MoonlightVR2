@@ -71,7 +71,7 @@ class VrMoonlightApp {
   void UpdateModelMatrix();
   void UpdateScreenGeometry();
   void TransformLensMesh(std::vector<float>& vertices, float scale,
-                         float offset_x, bool is_left_eye);
+                         float offset_x);
   void ApplyLensDistortionStrength(const CardboardMesh& source,
                                    std::vector<float>& uvs) const;
   void UpdateCameraModelMatrix();
