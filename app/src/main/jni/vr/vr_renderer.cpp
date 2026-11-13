@@ -979,7 +979,7 @@ void VrMoonlightApp::DrawSpatialControls(const Matrix4x4& vp) {
   const Matrix4x4 window_world =
       (window_locked_ ? window_anchor_matrix_ : head_world_matrix_) * model_matrix_;
   const Matrix4x4 control_world =
-      window_world * GetTranslationMatrix({0.0f, -1.18f, 0.04f}) *
+      window_world * GetTranslationMatrix({0.0f, 1.18f, 0.04f}) *
       GetScaleMatrix({0.75f, 0.50f, 1.0f});
   if(!spatial_ui_program_) return;
   glUseProgram(spatial_ui_program_);
