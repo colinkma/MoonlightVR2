@@ -98,9 +98,10 @@ Matrix4x4 Quatf::ToMatrix() const {
   const float zw = 2.0f * z * w;
 
   out.m[0][0] = 1 - yy - zz;
-  // This renderer uses column vectors and column-major OpenGL uploads.
-  // Use the camera-to-world rotation convention here; GetViewMatrixFromPose()
-  // transposes this 3x3 block to obtain the inverse (world-to-camera) view.
+  // Build the standard rotation matrix represented by this quaternion.
+  // In the Cardboard Android NDK convention used here, the returned quaternion
+  // matrix is consumed as head_view (world-to-camera). Code that needs the
+  // camera-to-world transform must use its inverse (the conjugate quaternion).
   out.m[0][1] = xy - zw;
   out.m[0][2] = xz + yw;
   out.m[0][3] = 0.0f;
