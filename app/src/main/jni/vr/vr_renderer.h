@@ -99,7 +99,6 @@ class VrMoonlightApp {
   bool window_dragging_ = false;
   Matrix4x4 drag_start_head_matrix_;
   Matrix4x4 drag_start_window_matrix_;
-  int64_t window_select_start_nano_ = 0;
   int64_t window_last_motion_nano_ = 0;
   float recenter_dwell_seconds_ = 0.0f;
   int64_t last_recenter_frame_nano_ = 0;
