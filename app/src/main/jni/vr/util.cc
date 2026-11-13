@@ -98,8 +98,8 @@ Matrix4x4 Quatf::ToMatrix() const {
   const float zw = 2.0f * z * w;
 
   out.m[0][0] = 1 - yy - zz;
-  // Keep this convention aligned with Google's Cardboard NDK sample:
-  // its returned quaternion matrix is used directly as head_view.
+  // This is the project's tested quaternion-to-matrix convention.
+  // Keep it paired with the inverse world anchor in vr_renderer.cpp.
   out.m[0][1] = xy - zw;
   out.m[0][2] = xz + yw;
   out.m[0][3] = 0.0f;
@@ -152,9 +152,8 @@ Matrix4x4 GetScaleMatrix(const std::array<float, 3>& scale) {
 
 Matrix4x4 GetViewMatrixFromPose(const std::array<float, 3>& translation,
                                 const Quatf& orientation) {
-  // Match Google's Cardboard NDK sample: use the returned pose quaternion
-  // directly for head_view. Its inverse is stored separately as the
-  // camera-to-world world anchor in VrMoonlightApp::OnDrawFrame().
+  // Preserve the direct-quaternion view convention validated by build
+  // 2026.11.14.2. The paired world anchor stores the inverse orientation.
   const Matrix4x4 world_to_head = orientation.ToMatrix();
   const Matrix4x4 inverse_translation = GetTranslationMatrix(
       {-translation[0], -translation[1], -translation[2]});
