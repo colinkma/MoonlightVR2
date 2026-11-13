@@ -290,6 +290,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             vrRenderer.setScreenDistance(vrSpatialScreenDistanceMeters);
             vrRenderer.setScreenSize(prefConfig.vrScreenSizeMultiplier);
             vrRenderer.setDisplayMode(prefConfig.enableVrSpatialMode ? 1 : 0);
+            vrRenderer.setSpatialControlsAutoHide(prefConfig.vrControlsAutoHide);
             vrRenderer.setViewportOrientation(getWindowManager().getDefaultDisplay().getRotation());
             vrSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
             if (prefConfig.enableVrCameraPassthrough) {
