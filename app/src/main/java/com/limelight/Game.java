@@ -1476,16 +1476,6 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
     @Override
     public boolean handleKeyDown(KeyEvent event) {
-        // Some Android devices expose a physical fingerprint reader as
-        // KEYCODE_FINGERPRINT (266). Recenter only when the device actually
-        // forwards that hardware event to this Activity.
-        if (event.getKeyCode() == 266 && event.getRepeatCount() == 0 &&
-                vrMode && vrRenderer != null && prefConfig != null &&
-                prefConfig.enableVrSpatialMode) {
-            vrRenderer.recenterView();
-            return true;
-        }
-
         // Pass-through virtual navigation keys
         if ((event.getFlags() & KeyEvent.FLAG_VIRTUAL_HARD_KEY) != 0) {
             return false;
