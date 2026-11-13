@@ -531,10 +531,13 @@ float VrMoonlightApp::OnDrawFrame() {
           window_locked_ ? 1 : 0, window_lock_pending_ ? 1 : 0);
     }
 
-    // Cardboard returns the camera pose in world coordinates. Keep this
-    // camera-to-world transform for anchors, gaze and the reticle; the view
-    // matrix uses its inverse in GetViewMatrixFromPose().
-    head_world_matrix_ = last_head_orientation_.ToMatrix();
+    // Cardboard's Android NDK sample uses the returned quaternion as the
+    // world-to-camera head view matrix. Store its inverse as camera-to-world
+    // for the persistent world anchor, gaze ray and reticle transforms.
+    const Quatf camera_to_world_orientation(
+        -last_head_orientation_.x, -last_head_orientation_.y,
+        -last_head_orientation_.z, last_head_orientation_.w);
+    head_world_matrix_ = camera_to_world_orientation.ToMatrix();
     head_world_matrix_.m[0][3] = 0.0f;
     head_world_matrix_.m[1][3] = 0.0f;
     head_world_matrix_.m[2][3] = 0.0f;
@@ -571,7 +574,7 @@ float VrMoonlightApp::OnDrawFrame() {
         -last_head_orientation_.x, -last_head_orientation_.y,
         -last_head_orientation_.z, last_head_orientation_.w);
     const Quatf relative_camera_orientation =
-        head_pitch_reference_orientation_ * inverse_current_orientation;
+        inverse_current_orientation * head_pitch_reference_orientation_;
     const Matrix4x4 relative_camera_world = relative_camera_orientation.ToMatrix();
     // A downward head rotation produces a negative pitch value.
     const float sin_pitch = std::clamp(-relative_camera_world.m[1][2],
