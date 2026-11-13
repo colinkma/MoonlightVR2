@@ -406,6 +406,8 @@ void VrMoonlightApp::SetDisplayMode(int mode) {
     if (head_tracker_ != nullptr) {
       display_mode_ = 1;
       toolbar_anchor_valid_ = false;
+      spatial_controls_visible_ = true;
+      last_spatial_controls_gaze_nano_ = 0;
       // Start as a spatially anchored floating window; the first valid pose
       // captures the anchor on the GL thread without a one-frame jump.
       window_locked_ = true;
@@ -486,9 +488,11 @@ float VrMoonlightApp::OnDrawFrame() {
       VR_LOGE("Cardboard returned invalid head pose quaternion");
     } else {
       const float inverse_norm = 1.0f / std::sqrt(orientation_norm_sq);
+      // Rotate the Cardboard landscape frame around Y: preserve yaw,
+      // while mapping device pitch and roll to the renderer's pitch/roll axes.
       last_head_orientation_ = Quatf(
-          orientation[0] * inverse_norm, orientation[1] * inverse_norm,
-          orientation[2] * inverse_norm, orientation[3] * inverse_norm);
+          orientation[2] * inverse_norm, orientation[1] * inverse_norm,
+          -orientation[0] * inverse_norm, orientation[3] * inverse_norm);
     }
 
     // Cardboard provides 3DoF orientation, but its translation is not a
@@ -880,8 +884,12 @@ void VrMoonlightApp::RenderSpatialVideoToTexture() {
 void VrMoonlightApp::UpdateSpatialGaze() {
   // Keep the control strip in the initial orientation frame so the user can
   // look down toward it even while the stream window follows the headset.
+  const Matrix4x4 window_world =
+      (window_locked_ ? window_anchor_matrix_ : head_world_matrix_) * model_matrix_;
+  // Attach the toolbar to the upper edge of the floating window. The
+  // screen model flips local Y, so negative local Y is visually above it.
   const Matrix4x4 control_world =
-      toolbar_anchor_matrix_ * GetTranslationMatrix({0.0f, -0.62f, -1.35f}) *
+      window_world * GetTranslationMatrix({0.0f, -1.18f, 0.04f}) *
       GetScaleMatrix({0.75f, 0.50f, 1.0f});
   Matrix4x4 inverse;
   if(!InvertMatrix(control_world,inverse)) { gaze_target_=-1; gaze_dwell_seconds_=0.f; gaze_action_armed_=true; return; }
@@ -899,6 +907,18 @@ void VrMoonlightApp::UpdateSpatialGaze() {
       if(std::fabs(x-centers[i])<0.145f&&std::fabs(y)<0.105f) { gaze_target_=i; break; }
   }
   const int64_t now=GetBootTimeNano();
+  if (gaze_target_ >= 0) {
+    spatial_controls_visible_ = true;
+    last_spatial_controls_gaze_nano_ = now;
+  } else {
+    if (last_spatial_controls_gaze_nano_ == 0) {
+      last_spatial_controls_gaze_nano_ = now;
+    }
+    if (spatial_controls_auto_hide_ &&
+        now - last_spatial_controls_gaze_nano_ >= 3000000000LL) {
+      spatial_controls_visible_ = false;
+    }
+  }
   if (gaze_target_ != previous_gaze_target_) {
     gaze_dwell_seconds_ = 0.0f;
     gaze_action_armed_ = true;
@@ -1276,6 +1296,15 @@ void VrMoonlightApp::SetCameraTextureTransform(const float* transform) {
 
 void VrMoonlightApp::SetCameraEnabled(bool enabled) {
   camera_enabled_ = enabled;
+}
+
+void VrMoonlightApp::SetSpatialControlsAutoHide(bool enabled) {
+  spatial_controls_auto_hide_ = enabled;
+  if (!enabled) {
+    spatial_controls_visible_ = true;
+  } else if (last_spatial_controls_gaze_nano_ == 0) {
+    spatial_controls_visible_ = true;
+  }
 }
 
 }  // namespace moonlight_vr
