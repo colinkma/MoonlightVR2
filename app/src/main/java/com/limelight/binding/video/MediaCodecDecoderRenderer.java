@@ -698,7 +698,7 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
             boolean newFormat = MediaCodecHelper.setDecoderLowLatencyOptions(mediaFormat, selectedDecoderInfo, tryNumber);
 
             // Throw the underlying codec exception on the last attempt if the caller requested it
-            if (tryConfigureDecoder(selectedDecoderInfo, mediaFormat, !newFormat && throwOnCodecError)) {
+            if (tryConfigureDecoder(selectedDecoderInfo, mediaFormat, false)) {
                 // Success!
                 break;
             }
@@ -731,6 +731,12 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
                     if (fallbackConfigured) {
                         break;
                     }
+                }
+                // Preserve the original exception detail for decoder reset paths
+                // after the compatibility retries have been exhausted.
+                if (throwOnCodecError) {
+                    mediaFormat.setInteger(MediaFormat.KEY_FRAME_RATE, refreshRate);
+                    tryConfigureDecoder(selectedDecoderInfo, mediaFormat, true);
                 }
                 // We couldn't configure a decoder even after frame-rate hint fallbacks.
                 return -5;
