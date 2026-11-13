@@ -1003,13 +1003,10 @@ void VrMoonlightApp::UpdateSpatialGaze() {
         window_select_dwell_seconds_=0.f;
         window_select_armed_=true;
         if (!window_edit_mode_) {
+          // Dragging already updates the world anchor continuously. Turning
+          // edit mode off simply commits that final anchor in place.
           window_locked_=true;
-          window_anchor_matrix_=head_world_matrix_ * model_matrix_;
-          // The anchor stores the world orientation of the window itself;
-          // remove the model transform because it remains applied at draw time.
-          Matrix4x4 inverse_model;
-          if (InvertMatrix(model_matrix_,inverse_model))
-            window_anchor_matrix_=head_world_matrix_;
+          window_lock_pending_=false;
         }
         break;
     }
@@ -1095,11 +1092,12 @@ void VrMoonlightApp::DrawSpatialControls(const Matrix4x4& vp) {
   const float normal[]={0.13f,0.16f,0.21f,1.f};
   const float focus[]={0.08f,0.38f,0.72f,1.f};
   const float locked_color[]={0.08f,0.28f,0.20f,1.f};
+  const float edit_color[]={0.42f,0.22f,0.08f,1.f};
   const float white[]={0.9f,0.94f,1.f,1.f};
   rect(0.f,0.f,0.025f,2.02f,0.27f,panel);
   for(int i=0;i<5;++i) {
     rect(centers[i],0.f,0.035f,0.31f,0.20f,
-         gaze_target_==i?focus:(i==4&&window_locked_?locked_color:normal));
+         gaze_target_==i?focus:(i==4&&window_edit_mode_?edit_color:(i==4&&window_locked_?locked_color:normal)));
     if(i<2) {
       rect(centers[i],0.f,0.046f,0.105f,0.012f,white);
       if(i==1) rect(centers[i],0.f,0.047f,0.012f,0.105f,white);
@@ -1109,35 +1107,46 @@ void VrMoonlightApp::DrawSpatialControls(const Matrix4x4& vp) {
       rect(centers[i],0.f,0.046f,0.06f,0.012f,white);
       if(i==3) rect(centers[i],0.f,0.047f,0.012f,0.06f,white);
     } else {
-      rect(centers[i],0.f,0.046f,0.075f,0.055f,white);
-      if (window_locked_) {
-        rect(centers[i],0.04f,0.046f,0.055f,0.025f,white);
-      } else {
-        rect(centers[i]+0.025f,0.045f,0.046f,0.025f,0.05f,white);
-        rect(centers[i]+0.005f,0.07f,0.046f,0.04f,0.012f,white);
-      }
+      // Four corner marks: spatial placement/edit mode, not a padlock.
+      rect(centers[i]-0.035f,0.025f,0.046f,0.012f,0.035f,white);
+      rect(centers[i]+0.035f,0.025f,0.046f,0.012f,0.035f,white);
+      rect(centers[i]-0.035f,-0.025f,0.046f,0.012f,0.035f,white);
+      rect(centers[i]+0.035f,-0.025f,0.046f,0.012f,0.035f,white);
     }
-    if(gaze_target_==i&&gaze_action_armed_) {
-      const float progress[]={0.3f,0.9f,1.f,1.f};
-      const float amount=std::clamp(gaze_dwell_seconds_/kGazeDwellSeconds,0.f,1.f);
-      rect(centers[i]-0.145f+0.145f*amount,-0.105f,0.05f,0.29f*amount,0.012f,progress);
-    }
+
   }
 
-  // Head-locked reticle marks the centre of the simulated gaze ray.
-  const float reticle_color[] = {0.92f, 0.96f, 1.0f, 0.95f};
+  // One clockwise progress ring around the reticle communicates every
+  // dwell action; toolbar glyphs remain static.
+  const float reticle_color[] = {0.78f, 0.84f, 0.92f, 0.95f};
+  float progress=0.f;
+  if (recenter_dwell_seconds_>0.f)
+    progress=std::clamp(recenter_dwell_seconds_/kRecenterDwellSeconds,0.f,1.f);
+  else if (window_edit_mode_&&!window_dragging_&&window_select_dwell_seconds_>0.f)
+    progress=std::clamp(window_select_dwell_seconds_/kWindowSelectDwellSeconds,0.f,1.f);
+  else if (gaze_target_>=0&&gaze_action_armed_)
+    progress=std::clamp(gaze_dwell_seconds_/kGazeDwellSeconds,0.f,1.f);
+
   const Matrix4x4 reticle_pose = GetTranslationMatrix({0.0f, 0.0f, -1.35f});
-  const Matrix4x4 reticle_h = GetScaleMatrix({0.018f, 0.002f, 1.0f});
-  const auto reticle_h_mvp =
-      (vp * head_world_matrix_ * reticle_pose * reticle_h).ToGlArray();
-  glUniformMatrix4fv(spatial_ui_mvp_uniform_, 1, GL_FALSE, reticle_h_mvp.data());
-  glUniform4fv(spatial_ui_color_uniform_, 1, reticle_color);
-  glDrawArrays(GL_TRIANGLES, 0, 6);
-  const Matrix4x4 reticle_v = GetScaleMatrix({0.002f, 0.018f, 1.0f});
-  const auto reticle_v_mvp =
-      (vp * head_world_matrix_ * reticle_pose * reticle_v).ToGlArray();
-  glUniformMatrix4fv(spatial_ui_mvp_uniform_, 1, GL_FALSE, reticle_v_mvp.data());
-  glDrawArrays(GL_TRIANGLES, 0, 6);
+  constexpr int kRingSegments=48;
+  const int visible_segments=progress>0.f
+      ? std::max(1,static_cast<int>(std::ceil(progress*kRingSegments)))
+      : kRingSegments;
+  for(int i=0;i<visible_segments;++i) {
+    const float angle=-1.57079632679f-
+        (6.28318530718f*static_cast<float>(i)/kRingSegments);
+    Matrix4x4 rotate;
+    for(int k=0;k<4;++k) rotate.m[k][k]=1.f;
+    rotate.m[0][0]=std::cos(angle); rotate.m[0][1]=-std::sin(angle);
+    rotate.m[1][0]=std::sin(angle); rotate.m[1][1]=std::cos(angle);
+    const Matrix4x4 segment =
+        GetTranslationMatrix({0.034f*std::cos(angle),0.034f*std::sin(angle),0.f}) *
+        rotate * GetScaleMatrix({0.0035f,0.008f,1.f});
+    const auto ring_mvp=(vp*head_world_matrix_*reticle_pose*segment).ToGlArray();
+    glUniformMatrix4fv(spatial_ui_mvp_uniform_,1,GL_FALSE,ring_mvp.data());
+    glUniform4fv(spatial_ui_color_uniform_,1,reticle_color);
+    glDrawArrays(GL_TRIANGLES,0,6);
+  }
   glDisableVertexAttribArray(spatial_ui_pos_attrib_);
 }
 
