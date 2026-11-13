@@ -1082,7 +1082,7 @@ void VrMoonlightApp::UpdateSpatialGaze() {
   last_window_select_frame_nano_=now;
 }
 void VrMoonlightApp::DrawSpatialControls(const Matrix4x4& vp) {
-  if (spatial_controls_auto_hide_ && !spatial_controls_visible_) return;
+  const bool draw_toolbar = !(spatial_controls_auto_hide_ && !spatial_controls_visible_);
   const Matrix4x4 window_world =
       (window_locked_ ? window_anchor_matrix_ : head_world_matrix_) * model_matrix_;
   const Matrix4x4 control_world =
@@ -1100,6 +1100,7 @@ void VrMoonlightApp::DrawSpatialControls(const Matrix4x4& vp) {
     glUniform4fv(spatial_ui_color_uniform_,1,color);
     glDrawArrays(GL_TRIANGLES,0,6);
   };
+  if (draw_toolbar) {
   const float panel[]={0.018f,0.024f,0.038f,0.92f};
   const float normal[]={0.13f,0.16f,0.21f,1.f};
   const float focus[]={0.08f,0.38f,0.72f,1.f};
@@ -1128,12 +1129,16 @@ void VrMoonlightApp::DrawSpatialControls(const Matrix4x4& vp) {
 
   }
 
+  }
+
   // One clockwise progress ring around the reticle communicates every
   // dwell action; toolbar glyphs remain static.
   const float reticle_color[] = {0.78f, 0.84f, 0.92f, 0.95f};
   float progress=0.f;
   if (recenter_dwell_seconds_>0.f)
     progress=std::clamp(recenter_dwell_seconds_/kRecenterDwellSeconds,0.f,1.f);
+  else if (window_dragging_)
+    progress=std::clamp(static_cast<float>(GetBootTimeNano()-window_last_motion_nano_)/1.0e9f,0.f,1.f);
   else if (window_edit_mode_&&!window_dragging_&&window_select_dwell_seconds_>0.f)
     progress=std::clamp(window_select_dwell_seconds_/kWindowSelectDwellSeconds,0.f,1.f);
   else if (gaze_target_>=0&&gaze_action_armed_)
