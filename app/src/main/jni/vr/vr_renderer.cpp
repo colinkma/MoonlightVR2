@@ -969,6 +969,10 @@ void VrMoonlightApp::UpdateSpatialGaze() {
       window_anchor_matrix_=head_world_matrix_;
       window_locked_=true;
       window_lock_pending_=false;
+      window_edit_mode_=false;
+      window_dragging_=false;
+      window_select_dwell_seconds_=0.f;
+      window_select_armed_=true;
       recenter_action_armed_=false;
       recenter_dwell_seconds_=0.f;
     }
@@ -1062,7 +1066,7 @@ void VrMoonlightApp::UpdateSpatialGaze() {
       float motion=0.f;
       for(int row=0;row<3;++row) for(int col=0;col<3;++col)
         motion+=std::fabs(head_world_matrix_.m[row][col]-drag_start_head_matrix_.m[row][col]);
-      if(motion>0.003f) {
+      if(motion>0.025f) {
         window_anchor_matrix_=moved;
         drag_start_head_matrix_=head_world_matrix_;
         drag_start_window_matrix_=moved;
