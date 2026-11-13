@@ -98,9 +98,9 @@ Matrix4x4 Quatf::ToMatrix() const {
   const float zw = 2.0f * z * w;
 
   out.m[0][0] = 1 - yy - zz;
-  // This is the normalized quaternion rotation. Cardboard's Android NDK
-  // sample uses this matrix directly as the head view (world-to-camera);
-  // world-anchor and gaze transforms use its conjugate (camera-to-world).
+  // This is the active camera-to-world rotation represented by the
+  // normalized Cardboard pose quaternion. The world-to-camera view matrix
+  // uses its conjugate to match Cardboard's MathFu matrix convention.
   out.m[0][1] = xy - zw;
   out.m[0][2] = xz + yw;
   out.m[0][3] = 0.0f;
