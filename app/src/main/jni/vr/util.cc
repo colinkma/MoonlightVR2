@@ -98,10 +98,9 @@ Matrix4x4 Quatf::ToMatrix() const {
   const float zw = 2.0f * z * w;
 
   out.m[0][0] = 1 - yy - zz;
-  // Build the standard rotation matrix represented by this quaternion.
-  // In the Cardboard Android NDK convention used here, the returned quaternion
-  // matrix is consumed as head_view (world-to-camera). Code that needs the
-  // camera-to-world transform must use its inverse (the conjugate quaternion).
+  // This is the active camera-to-world rotation represented by the
+  // normalized quaternion. Rendering uses its inverse (world-to-camera),
+  // constructed in GetViewMatrixFromPose().
   out.m[0][1] = xy - zw;
   out.m[0][2] = xz + yw;
   out.m[0][3] = 0.0f;
@@ -154,11 +153,14 @@ Matrix4x4 GetScaleMatrix(const std::array<float, 3>& scale) {
 
 Matrix4x4 GetViewMatrixFromPose(const std::array<float, 3>& translation,
                                 const Quatf& orientation) {
-  // Cardboard's head-tracker quaternion is the head-view rotation used by
-  // the official NDK sample. Keep this matrix in the same convention:
-  // view = translation * rotation. The inverse rotation is used separately
-  // when storing a world-space window anchor.
-  return GetTranslationMatrix(translation) * orientation.ToMatrix();
+  // Cardboard returns the head pose. A view matrix is the inverse pose:
+  // inverse rotation followed by inverse translation (column-vector order).
+  const Quatf inverse_orientation(
+      -orientation.x, -orientation.y, -orientation.z, orientation.w);
+  const Matrix4x4 inverse_rotation = inverse_orientation.ToMatrix();
+  const Matrix4x4 inverse_translation = GetTranslationMatrix(
+      {-translation[0], -translation[1], -translation[2]});
+  return inverse_rotation * inverse_translation;
 }
 
 float AngleBetweenVectors(const std::array<float, 4>& vec1,
