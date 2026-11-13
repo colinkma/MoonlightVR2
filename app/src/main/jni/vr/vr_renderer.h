@@ -91,8 +91,19 @@ class VrMoonlightApp {
   bool screen_params_changed_;
   int display_mode_ = 0;
   CardboardViewportOrientation viewport_orientation_ = kLandscapeLeft;
-  bool window_locked_ = false;
+  // Spatial window is world-anchored by default. Edit mode temporarily lets
+  // the user select and reposition it with head rotation.
+  bool window_locked_ = true;
   bool window_lock_pending_ = false;
+  bool window_edit_mode_ = false;
+  bool window_dragging_ = false;
+  Matrix4x4 drag_start_head_matrix_;
+  Matrix4x4 drag_start_window_matrix_;
+  int64_t window_select_start_nano_ = 0;
+  int64_t window_last_motion_nano_ = 0;
+  float recenter_dwell_seconds_ = 0.0f;
+  int64_t last_recenter_frame_nano_ = 0;
+  bool recenter_action_armed_ = true;
   bool head_pose_valid_ = false;
   std::array<float, 3> last_head_position_ = {0.0f, 0.0f, 0.0f};
   Quatf last_head_orientation_ = Quatf(0.0f, 0.0f, 0.0f, 1.0f);
@@ -117,11 +128,17 @@ class VrMoonlightApp {
   GLint spatial_ui_mvp_uniform_ = -1;
   GLint spatial_ui_color_uniform_ = -1;
   static constexpr float kGazeDwellSeconds = 0.8f;
+  static constexpr float kWindowSelectDwellSeconds = 3.0f;
+  static constexpr float kWindowIdleReleaseSeconds = 1.0f;
+  static constexpr float kRecenterDwellSeconds = 2.0f;
   int gaze_target_ = -1;
   int previous_gaze_target_ = -2;
   float gaze_dwell_seconds_ = 0.0f;
   int64_t last_gaze_frame_nano_ = 0;
   bool gaze_action_armed_ = true;
+  float window_select_dwell_seconds_ = 0.0f;
+  int64_t last_window_select_frame_nano_ = 0;
+  bool window_select_armed_ = true;
   bool spatial_controls_auto_hide_ = true;
   bool spatial_controls_visible_ = true;
   int64_t last_spatial_controls_gaze_nano_ = 0;
