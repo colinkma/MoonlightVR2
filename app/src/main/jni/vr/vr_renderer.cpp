@@ -521,7 +521,9 @@ float VrMoonlightApp::OnDrawFrame() {
 
     // In the Cardboard world frame, +Y is up and the head looks down -Z.
     // A positive X pitch rotates the forward vector toward -Y.
-    const float sin_pitch = std::clamp(head_world_matrix_.m[1][2], -1.0f, 1.0f);
+    // The camera's forward vector is -Z in local space; its world-space
+    // vertical component is -R[1][2]. Positive values mean looking down.
+    const float sin_pitch = std::clamp(-head_world_matrix_.m[1][2], -1.0f, 1.0f);
     head_pitch_degrees_ = std::asin(sin_pitch) * 180.0f /
                           3.14159265358979323846f;
     RenderSpatialVideoToTexture();
