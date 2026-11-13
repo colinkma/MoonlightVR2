@@ -31,6 +31,10 @@ public class VrCameraManager {
     private volatile boolean isStarted = false;
     private volatile boolean isOpening = false;
     private volatile Runnable onStartedListener;
+    // Every start/stop operation gets a new generation. Camera2 callbacks can
+    // arrive after close(), so a boolean is not sufficient to distinguish an
+    // old open request from a newer one.
+    private int cameraGeneration = 0;
 
     public VrCameraManager(Context context) {
         this.context = context;
@@ -53,12 +57,13 @@ public class VrCameraManager {
             return;
         }
 
+        final int generation = ++cameraGeneration;
         isOpening = true;
         this.onStartedListener = onStartedListener;
         cameraSurface = surface;
         cameraManager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
 
-        cameraThread = new HandlerThread("CameraThread");
+        cameraThread = new HandlerThread("CameraThread-" + generation);
         cameraThread.start();
         cameraHandler = new Handler(cameraThread.getLooper());
 
@@ -70,7 +75,7 @@ public class VrCameraManager {
                 return;
             }
 
-            cameraManager.openCamera(cameraId, stateCallback, cameraHandler);
+            cameraManager.openCamera(cameraId, createStateCallback(generation), cameraHandler);
         } catch (CameraAccessException | SecurityException e) {
             Log.e(TAG, "Failed to open camera", e);
             stopCamera();
@@ -92,122 +97,187 @@ public class VrCameraManager {
         return null;
     }
 
-    private final CameraDevice.StateCallback stateCallback = new CameraDevice.StateCallback() {
-        @Override
-        public void onOpened(CameraDevice camera) {
-            if (!isOpening) {
+    private CameraDevice.StateCallback createStateCallback(final int generation) {
+        return new CameraDevice.StateCallback() {
+            @Override
+            public void onOpened(CameraDevice camera) {
+                synchronized (VrCameraManager.this) {
+                    if (generation != cameraGeneration || !isOpening) {
+                        camera.close();
+                        return;
+                    }
+                    cameraDevice = camera;
+                }
+                createCaptureSession(generation, camera);
+            }
+
+            @Override
+            public void onDisconnected(CameraDevice camera) {
+                boolean currentRequest;
+                synchronized (VrCameraManager.this) {
+                    currentRequest = generation == cameraGeneration;
+                    if (cameraDevice == camera) {
+                        cameraDevice = null;
+                    }
+                }
                 camera.close();
+                if (currentRequest) {
+                    Log.w(TAG, "Camera disconnected");
+                    stopCamera();
+                }
+            }
+
+            @Override
+            public void onError(CameraDevice camera, int error) {
+                boolean currentRequest;
+                synchronized (VrCameraManager.this) {
+                    currentRequest = generation == cameraGeneration;
+                    if (cameraDevice == camera) {
+                        cameraDevice = null;
+                    }
+                }
+                camera.close();
+                if (currentRequest) {
+                    Log.e(TAG, "Camera error: " + error);
+                    stopCamera();
+                }
+            }
+        };
+    }
+
+    private void createCaptureSession(final int generation, final CameraDevice device) {
+        final Surface targetSurface;
+        final Handler targetHandler;
+        synchronized (this) {
+            if (generation != cameraGeneration || !isOpening
+                    || cameraDevice != device || cameraSurface == null
+                    || cameraHandler == null) {
                 return;
             }
-            cameraDevice = camera;
-            createCaptureSession();
-        }
-
-        @Override
-        public void onDisconnected(CameraDevice camera) {
-            camera.close();
-            if (cameraDevice == camera) {
-                cameraDevice = null;
-            }
-            stopCamera();
-        }
-
-        @Override
-        public void onError(CameraDevice camera, int error) {
-            camera.close();
-            if (cameraDevice == camera) {
-                cameraDevice = null;
-            }
-            Log.e(TAG, "Camera error: " + error);
-            stopCamera();
-        }
-    };
-
-    private void createCaptureSession() {
-        if (cameraDevice == null || cameraSurface == null) {
-            Log.e(TAG, "Cannot create session: device=" + cameraDevice + " surface=" + cameraSurface);
-            return;
+            targetSurface = cameraSurface;
+            targetHandler = cameraHandler;
         }
 
         try {
-            List<Surface> surfaces = Collections.singletonList(cameraSurface);
-            Log.i(TAG, "Creating capture session with surface: " + cameraSurface + " isValid=" + cameraSurface.isValid());
-            cameraDevice.createCaptureSession(
+            List<Surface> surfaces = Collections.singletonList(targetSurface);
+            Log.i(TAG, "Creating capture session: " + targetSurface
+                    + " isValid=" + targetSurface.isValid());
+            device.createCaptureSession(
                     surfaces,
                     new CameraCaptureSession.StateCallback() {
                         @Override
                         public void onConfigured(CameraCaptureSession session) {
-                            if (!isOpening) {
-                                session.close();
-                                return;
+                            synchronized (VrCameraManager.this) {
+                                if (generation != cameraGeneration || !isOpening
+                                        || cameraDevice != device) {
+                                    session.close();
+                                    return;
+                                }
+                                captureSession = session;
                             }
                             Log.i(TAG, "Capture session configured successfully");
-                            captureSession = session;
-                            startPreview();
+                            startPreview(generation, device, session, targetSurface, targetHandler);
                         }
 
                         @Override
                         public void onConfigureFailed(CameraCaptureSession session) {
-                            Log.e(TAG, "Camera configuration FAILED");
                             session.close();
+                            synchronized (VrCameraManager.this) {
+                                if (generation != cameraGeneration) {
+                                    return;
+                                }
+                            }
+                            Log.e(TAG, "Camera configuration failed");
                             stopCamera();
                         }
                     },
-                    cameraHandler
+                    targetHandler
             );
         } catch (CameraAccessException | IllegalStateException e) {
             Log.e(TAG, "Failed to create camera capture session", e);
+            synchronized (this) {
+                if (generation != cameraGeneration) {
+                    return;
+                }
+            }
             stopCamera();
         }
     }
 
-    private void startPreview() {
-        if (captureSession == null || cameraDevice == null) {
-            return;
-        }
-
+    private void startPreview(final int generation, final CameraDevice device,
+                              final CameraCaptureSession session, final Surface targetSurface,
+                              final Handler targetHandler) {
         try {
-            CaptureRequest.Builder previewRequest = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
-            previewRequest.addTarget(cameraSurface);
-            previewRequest.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO);
+            CaptureRequest.Builder previewRequest =
+                    device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
+            previewRequest.addTarget(targetSurface);
+            previewRequest.set(CaptureRequest.CONTROL_AF_MODE,
+                    CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO);
+            session.setRepeatingRequest(previewRequest.build(), null, targetHandler);
 
-            captureSession.setRepeatingRequest(previewRequest.build(), null, cameraHandler);
-            isStarted = true;
-            isOpening = false;
+            Runnable listener;
+            synchronized (this) {
+                if (generation != cameraGeneration || !isOpening || captureSession != session
+                        || cameraDevice != device) {
+                    try {
+                        session.stopRepeating();
+                    } catch (Exception ignored) {
+                    }
+                    session.close();
+                    return;
+                }
+                isStarted = true;
+                isOpening = false;
+                listener = onStartedListener;
+                onStartedListener = null;
+            }
             Log.i(TAG, "Camera preview started");
-            Runnable listener = onStartedListener;
-            onStartedListener = null;
             if (listener != null) {
                 listener.run();
             }
         } catch (CameraAccessException | IllegalStateException e) {
             Log.e(TAG, "Failed to start preview", e);
+            synchronized (this) {
+                if (generation != cameraGeneration) {
+                    return;
+                }
+            }
             stopCamera();
         }
     }
 
     public synchronized void stopCamera() {
+        // Invalidate callbacks before closing resources. A late onOpened() or
+        // onConfigured() from this request must not attach to a later session.
+        ++cameraGeneration;
         isStarted = false;
         isOpening = false;
         onStartedListener = null;
-        if (captureSession != null) {
+
+        CameraCaptureSession oldSession = captureSession;
+        CameraDevice oldDevice = cameraDevice;
+        HandlerThread oldThread = cameraThread;
+
+        captureSession = null;
+        cameraDevice = null;
+        cameraSurface = null;
+        cameraThread = null;
+        cameraHandler = null;
+        cameraManager = null;
+
+        if (oldSession != null) {
             try {
-                captureSession.stopRepeating();
+                oldSession.stopRepeating();
             } catch (Exception ignored) {
             }
-            captureSession.close();
-            captureSession = null;
+            oldSession.close();
         }
-        if (cameraDevice != null) {
-            cameraDevice.close();
-            cameraDevice = null;
+        if (oldDevice != null) {
+            oldDevice.close();
         }
-        cameraSurface = null;
-        if (cameraThread != null) {
-            cameraThread.quitSafely();
-            cameraThread = null;
+        if (oldThread != null) {
+            oldThread.quitSafely();
         }
-        cameraHandler = null;
         Log.i(TAG, "Camera stopped");
     }
 }
