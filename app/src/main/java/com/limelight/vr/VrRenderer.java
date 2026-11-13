@@ -202,7 +202,9 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
 
                 magneticHeadingRadians = orientation[0];
                 magneticHeadingAccuracyRadians = event.values.length > 4
-                        ? event.values[4] : Float.MAX_VALUE;
+                        ? event.values[4]
+                        : (event.accuracy == SensorManager.SENSOR_STATUS_ACCURACY_HIGH
+                                ? 0.25f : Float.MAX_VALUE);
                 magneticHeadingSensorAccuracy = event.accuracy;
                 magneticHeadingTimestampNanos = event.timestamp != 0L
                         ? event.timestamp : SystemClock.elapsedRealtimeNanos();
