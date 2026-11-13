@@ -153,11 +153,12 @@ Matrix4x4 GetScaleMatrix(const std::array<float, 3>& scale) {
 
 Matrix4x4 GetViewMatrixFromPose(const std::array<float, 3>& translation,
                                 const Quatf& orientation) {
-  // Cardboard's Android NDK sample uses the returned quaternion matrix
-  // directly as head_view (world-to-camera) in eye_view * head_view.
-  // Do not invert it here: doing so makes world-anchored content move in
-  // the same direction as head pitch instead of remaining world-locked.
-  const Matrix4x4 world_to_head = orientation.ToMatrix();
+  // Cardboard's MathFu quaternion matrix is the transpose of this
+  // project's active-rotation ToMatrix(). The NDK sample uses that transposed
+  // matrix as head_view (world-to-camera), so use the conjugate here.
+  const Quatf inverse_orientation(-orientation.x, -orientation.y,
+                                  -orientation.z, orientation.w);
+  const Matrix4x4 world_to_head = inverse_orientation.ToMatrix();
   const Matrix4x4 inverse_translation = GetTranslationMatrix(
       {-translation[0], -translation[1], -translation[2]});
   return world_to_head * inverse_translation;
