@@ -262,6 +262,13 @@ Java_com_limelight_vr_VrRenderer_nativeSetCameraEnabled(JNIEnv*, jobject,
   FromHandle(handle)->SetCameraEnabled(enabled);
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_com_limelight_vr_VrRenderer_nativeSetSpatialControlsAutoHide(JNIEnv*, jobject,
+                                                                  jlong handle,
+                                                                  jboolean enabled) {
+  FromHandle(handle)->SetSpatialControlsAutoHide(enabled);
+}
+
 extern "C" JNIEXPORT jfloat JNICALL
 Java_com_limelight_vr_VrRenderer_nativeGetScreenSize(JNIEnv*, jobject, jlong handle) {
   return FromHandle(handle)->GetScreenSize();
