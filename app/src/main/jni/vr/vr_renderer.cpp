@@ -25,7 +25,7 @@ constexpr float kScreenWidthMeters = 2.2f;
 constexpr float kScreenAspectRatio = 16.0f / 9.0f;
 constexpr float kMinScreenDistanceMeters = 1.0f;
 constexpr float kMaxScreenDistanceMeters = 4.0f;
-constexpr float kDefaultScreenDistanceMeters = 2.0f;
+constexpr float kDefaultScreenDistanceMeters = 2.8f;
 constexpr float kMinLensScale = 0.5f;
 constexpr float kMaxLensScale = 3.0f;
 
@@ -440,6 +440,7 @@ void VrMoonlightApp::SetDisplayMode(int mode) {
       // captures the anchor on the GL thread without a one-frame jump.
       window_locked_ = true;
       window_lock_pending_ = true;
+      recenter_anchor_yaw_only_pending_ = true;
       window_edit_mode_ = false;
       window_dragging_ = false;
       window_select_dwell_seconds_ = 0.f;
@@ -497,6 +498,14 @@ void VrMoonlightApp::SetMagneticHeading(float headingRadians,
   magnetic_heading_accuracy_radians_ = headingAccuracyRadians;
   magnetic_heading_sensor_accuracy_ = sensorAccuracy;
   magnetic_heading_timestamp_nano_ = GetBootTimeNano();
+  // Do not carry a geomagnetic correction into a posture where the phone's
+  // display-frame azimuth is no longer a stable proxy for world-up yaw.
+  if (sensorAccuracy < 2 || !std::isfinite(headingAccuracyRadians) ||
+      headingAccuracyRadians > 0.35f) {
+    magnetic_yaw_reference_valid_ = false;
+    magnetic_yaw_correction_radians_ = 0.0f;
+    magnetic_yaw_stationary_since_nano_ = 0;
+  }
 }
 
 void VrMoonlightApp::SetWindowLocked(bool locked) {
@@ -504,6 +513,7 @@ void VrMoonlightApp::SetWindowLocked(bool locked) {
     if (head_pose_valid_) {
       window_anchor_matrix_ = head_world_matrix_;
       window_lock_pending_ = false;
+      recenter_anchor_yaw_only_pending_ = false;
     } else {
       window_lock_pending_ = true;
     }
@@ -669,7 +679,19 @@ float VrMoonlightApp::OnDrawFrame() {
       toolbar_anchor_valid_ = true;
     }
     if (window_locked_ && window_lock_pending_) {
-      window_anchor_matrix_ = head_world_matrix_;
+      if (recenter_anchor_yaw_only_pending_) {
+        // The recenter gesture is intentionally performed while looking up.
+        // Anchor only the world yaw, not that temporary pitch/roll, so the
+        // window returns to a neutral eye-level position when the user looks
+        // straight ahead again.
+        const float anchor_yaw = std::atan2(
+            head_world_matrix_.m[0][2], head_world_matrix_.m[2][2]);
+        window_anchor_matrix_ = MakeYawRotation(anchor_yaw) *
+            GetTranslationMatrix({0.0f, -0.07f, 0.0f});
+        recenter_anchor_yaw_only_pending_ = false;
+      } else {
+        window_anchor_matrix_ = head_world_matrix_;
+      }
       window_lock_pending_ = false;
     }
 
@@ -1285,7 +1307,7 @@ void VrMoonlightApp::DrawSpatialControls(const Matrix4x4& vp) {
   // user's head is moving. Dwell progress is a fine clockwise arc around it.
   const int64_t reticle_now = GetBootTimeNano();
   const bool reticle_visible = reticle_last_motion_nano_ != 0 &&
-      reticle_now - reticle_last_motion_nano_ < 1200000000LL;
+      reticle_now - reticle_last_motion_nano_ < 1800000000LL;
   float progress=0.f;
   if (recenter_dwell_seconds_>0.f)
     progress=std::clamp(recenter_dwell_seconds_/kRecenterDwellSeconds,0.f,1.f);
@@ -1298,10 +1320,16 @@ void VrMoonlightApp::DrawSpatialControls(const Matrix4x4& vp) {
 
   if (reticle_visible || progress > 0.f) {
     const Matrix4x4 reticle_pose = GetTranslationMatrix({0.0f, 0.0f, -1.35f});
-    const float point_color[] = {0.10f, 0.12f, 0.15f, 0.82f};
-    const float ring_color[] = {0.30f, 0.34f, 0.39f, 0.88f};
+    const float halo_color[] = {0.12f, 0.62f, 0.92f, 0.34f};
+    const float point_color[] = {0.92f, 0.98f, 1.0f, 1.0f};
+    const float ring_color[] = {0.12f, 0.78f, 1.0f, 0.98f};
     if (reticle_visible) {
-      const Matrix4x4 dot = GetScaleMatrix({0.0028f, 0.0028f, 1.f});
+      const Matrix4x4 halo = GetScaleMatrix({0.012f, 0.012f, 1.f});
+      const auto halo_mvp=(vp*head_world_matrix_*reticle_pose*halo).ToGlArray();
+      glUniformMatrix4fv(spatial_ui_mvp_uniform_,1,GL_FALSE,halo_mvp.data());
+      glUniform4fv(spatial_ui_color_uniform_,1,halo_color);
+      glDrawArrays(GL_TRIANGLES,0,6);
+      const Matrix4x4 dot = GetScaleMatrix({0.0042f, 0.0042f, 1.f});
       const auto dot_mvp=(vp*head_world_matrix_*reticle_pose*dot).ToGlArray();
       glUniformMatrix4fv(spatial_ui_mvp_uniform_,1,GL_FALSE,dot_mvp.data());
       glUniform4fv(spatial_ui_color_uniform_,1,point_color);
@@ -1320,8 +1348,8 @@ void VrMoonlightApp::DrawSpatialControls(const Matrix4x4& vp) {
         rotate.m[0][0]=std::cos(angle); rotate.m[0][1]=-std::sin(angle);
         rotate.m[1][0]=std::sin(angle); rotate.m[1][1]=std::cos(angle);
         const Matrix4x4 segment =
-            GetTranslationMatrix({0.0085f*std::cos(angle),0.0085f*std::sin(angle),0.f}) *
-            rotate * GetScaleMatrix({0.0008f,0.0022f,1.f});
+            GetTranslationMatrix({0.015f*std::cos(angle),0.015f*std::sin(angle),0.f}) *
+            rotate * GetScaleMatrix({0.0015f,0.0035f,1.f});
         const auto ring_mvp=(vp*head_world_matrix_*reticle_pose*segment).ToGlArray();
         glUniformMatrix4fv(spatial_ui_mvp_uniform_,1,GL_FALSE,ring_mvp.data());
         glUniform4fv(spatial_ui_color_uniform_,1,ring_color);
@@ -1357,10 +1385,16 @@ void VrMoonlightApp::RecenterView() {
     CardboardHeadTracker_recenter(head_tracker_);
     head_pose_valid_ = false;
     toolbar_anchor_valid_ = false;
-    // A recenter changes the tracker coordinate frame. Recapture a locked
-    // window anchor from the first valid pose in the new frame; otherwise the
-    // old anchor would be mixed with the recentered view and appear to jump.
-    window_lock_pending_ = window_locked_;
+    // Recenter always places the spatial display back in front of the user's
+    // neutral gaze. Ignore the temporary upward pitch used to invoke recenter.
+    screen_yaw_radians_ = 0.0f;
+    screen_pitch_radians_ = 0.0f;
+    UpdateModelMatrix();
+    window_locked_ = true;
+    window_edit_mode_ = false;
+    window_dragging_ = false;
+    window_lock_pending_ = true;
+    recenter_anchor_yaw_only_pending_ = true;
   }
 }
 
