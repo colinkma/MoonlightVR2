@@ -165,9 +165,10 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     private static final int LENS_SIDE_RIGHT = 2;
     private static final int CAMERA_PERMISSION_REQ = 1001;
     private VrCameraManager vrCameraManager;
-    private boolean vrHeadLookingDown = false;
+    private volatile boolean vrHeadLookingDown = false;
     private boolean vrCameraPermissionRequested = false;
-    private boolean vrCameraStartQueued = false;
+    private volatile boolean vrCameraStartQueued = false;
+    private int vrCameraRequestGeneration = 0;
     private float vrSpatialScreenDistanceMeters = 2.0f;
     private final VrRenderer.SurfaceListener vrSurfaceListener = new VrRenderer.SurfaceListener() {
         @Override
@@ -291,7 +292,6 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             vrRenderer.setScreenSize(prefConfig.vrScreenSizeMultiplier);
             vrRenderer.setDisplayMode(prefConfig.enableVrSpatialMode ? 1 : 0);
             vrRenderer.setSpatialControlsAutoHide(prefConfig.vrControlsAutoHide);
-            vrRenderer.setViewportOrientation(getWindowManager().getDefaultDisplay().getRotation());
             vrSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
             if (prefConfig.enableVrCameraPassthrough) {
                 vrCameraManager = new VrCameraManager(this);
@@ -310,6 +310,11 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
         // Enter landscape unless we're on a square screen
         setPreferredOrientationForCurrentDisplay();
+        // The activity may have been created in portrait before it requested landscape.
+        // Set Cardboard's viewport to the final display rotation after that request.
+        if (vrRenderer != null) {
+            vrRenderer.setViewportOrientation(getWindowManager().getDefaultDisplay().getRotation());
+        }
 
         if (prefConfig.stretchVideo || shouldIgnoreInsetsForResolution(prefConfig.width, prefConfig.height)) {
             // Allow the activity to layout under notches if the fill-screen option
@@ -672,6 +677,12 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
         // Set requested orientation for possible new screen size
         setPreferredOrientationForCurrentDisplay();
+        // Keep Cardboard's sensor-to-display transform in sync with rotations
+        // handled in-place by this Activity (configChanges includes orientation).
+        if (vrRenderer != null) {
+            vrRenderer.setViewportOrientation(getWindowManager().getDefaultDisplay().getRotation());
+        }
+
 
         if (virtualController != null) {
             // Refresh layout of OSC for possible new screen size
@@ -2446,13 +2457,21 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     }
 
     private void stopVrCameraPassthrough() {
+        // Invalidate camera-open work already queued on either the GL or camera
+        // thread. Without a generation token, a late onOpened/onConfigured
+        // callback can turn the passthrough back on after the user looks up.
+        ++vrCameraRequestGeneration;
+        vrCameraStartQueued = false;
         if (vrCameraManager != null) {
             vrCameraManager.stopCamera();
         }
         if (vrRenderer != null) {
-            vrRenderer.setCameraEnabled(false);
+            final VrRenderer renderer = vrRenderer;
+            renderer.setCameraEnabled(false);
+            if (vrSurfaceView != null) {
+                vrSurfaceView.queueEvent(renderer::releaseCameraSurface);
+            }
         }
-        vrCameraStartQueued = false;
     }
 
     private boolean handleVrLensTouch(MotionEvent event) {
@@ -3119,14 +3138,41 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                 || vrCameraStartQueued) {
             return;
         }
+        final int requestGeneration = vrCameraRequestGeneration;
+        final VrRenderer renderer = vrRenderer;
+        final VrCameraManager cameraManager = vrCameraManager;
         vrCameraStartQueued = true;
         vrSurfaceView.queueEvent(() -> {
             try {
-                Surface cameraSurface = vrRenderer.createCameraSurface();
-                vrCameraManager.startCamera(cameraSurface);
-                vrRenderer.setCameraEnabled(true);
+                if (requestGeneration != vrCameraRequestGeneration || !vrHeadLookingDown) {
+                    return;
+                }
+                Surface cameraSurface = renderer.createCameraSurface();
+                if (requestGeneration != vrCameraRequestGeneration || !vrHeadLookingDown) {
+                    cameraSurface.release();
+                    renderer.releaseCameraSurface();
+                    return;
+                }
+                cameraManager.startCamera(cameraSurface, () -> runOnUiThread(() -> {
+                    // Enable the camera layer only after Camera2 has an active
+                    // repeating preview, and only if the original look-down
+                    // request is still current.
+                    if (requestGeneration != vrCameraRequestGeneration
+                            || !vrHeadLookingDown
+                            || prefConfig == null
+                            || !prefConfig.enableVrSpatialMode
+                            || !prefConfig.enableVrCameraPassthrough
+                            || vrRenderer != renderer) {
+                        return;
+                    }
+                    renderer.setCameraEnabled(true);
+                }));
             } finally {
-                runOnUiThread(() -> vrCameraStartQueued = false);
+                runOnUiThread(() -> {
+                    if (requestGeneration == vrCameraRequestGeneration) {
+                        vrCameraStartQueued = false;
+                    }
+                });
             }
         });
     }
