@@ -488,11 +488,12 @@ float VrMoonlightApp::OnDrawFrame() {
       VR_LOGE("Cardboard returned invalid head pose quaternion");
     } else {
       const float inverse_norm = 1.0f / std::sqrt(orientation_norm_sq);
-      // Rotate the Cardboard landscape frame around Y: preserve yaw,
-      // while mapping device pitch and roll to the renderer's pitch/roll axes.
+      // CardboardHeadTracker_getPose() already converts the sensor pose
+      // into the requested viewport coordinate system. Remapping X/Z here
+      // would rotate pitch into roll a second time and make the window drift.
       last_head_orientation_ = Quatf(
-          orientation[2] * inverse_norm, orientation[1] * inverse_norm,
-          -orientation[0] * inverse_norm, orientation[3] * inverse_norm);
+          orientation[0] * inverse_norm, orientation[1] * inverse_norm,
+          orientation[2] * inverse_norm, orientation[3] * inverse_norm);
     }
 
     // Cardboard provides 3DoF orientation, but its translation is not a
