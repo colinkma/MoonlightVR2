@@ -772,7 +772,12 @@ void VrMoonlightApp::TransformLensMesh(std::vector<float>& vertices, float scale
   // alignment. Only constrain custom scaling/offset to the full display.
   const float tx_min = -1.0f - scaled_min_x;
   const float tx_max = 1.0f - scaled_max_x;
-  const float safe_offset_x = std::clamp(offset_x, tx_min, tx_max);
+  // At large user-selected scales the mesh can be wider than the display,
+  // making the legal offset interval inverted. Center it in that case rather
+  // than violating std::clamp's low <= high precondition.
+  const float safe_offset_x = tx_min <= tx_max
+      ? std::clamp(offset_x, tx_min, tx_max)
+      : (tx_min + tx_max) * 0.5f;
 
   for (size_t i = 0; i + 1 < vertices.size(); i += 2) {
     vertices[i] = c_x + (vertices[i] - c_x) * scale + safe_offset_x;
@@ -896,9 +901,9 @@ void VrMoonlightApp::UpdateSpatialGaze() {
   const Matrix4x4 window_world =
       (window_locked_ ? window_anchor_matrix_ : head_world_matrix_) * model_matrix_;
   // Attach the toolbar to the upper edge of the floating window. The
-  // screen model flips local Y, so negative local Y is visually above it.
+  // The screen uses an upright local Y axis, so positive local Y is above it.
   const Matrix4x4 control_world =
-      window_world * GetTranslationMatrix({0.0f, -1.18f, 0.04f}) *
+      window_world * GetTranslationMatrix({0.0f, 1.18f, 0.04f}) *
       GetScaleMatrix({0.75f, 0.50f, 1.0f});
   Matrix4x4 inverse;
   if(!InvertMatrix(control_world,inverse)) { gaze_target_=-1; gaze_dwell_seconds_=0.f; gaze_action_armed_=true; return; }
@@ -1177,7 +1182,7 @@ void VrMoonlightApp::AdjustRightLensOffset(float delta_x) {
 void VrMoonlightApp::UpdateModelMatrix() {
   const float half_width = kScreenWidthMeters * 0.5f * screen_size_multiplier_;
   const float half_height = half_width / video_aspect_ratio_;
-  const std::array<float, 3> scale = {half_width, -half_height, 1.0f};
+  const std::array<float, 3> scale = {half_width, half_height, 1.0f};
   const std::array<float, 3> translation = {0.0f, 0.0f, -screen_distance_meters_};
 
   Matrix4x4 local_rot;
