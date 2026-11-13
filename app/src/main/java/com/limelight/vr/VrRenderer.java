@@ -42,7 +42,7 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     private static final float CAMERA_ENTER_PITCH_DEGREES = 35.0f;
     private static final float CAMERA_EXIT_PITCH_DEGREES = 25.0f;
     private HeadPitchListener headPitchListener;
-    private boolean lookingDownForCamera = false;
+    private volatile boolean lookingDownForCamera = false;
 
     private final GLSurfaceView glSurfaceView;
     private final SurfaceListener surfaceListener;
@@ -63,15 +63,7 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     private volatile boolean cameraFrameAvailable = false;
 
     public Surface createCameraSurface() {
-        if (cameraSurface != null) {
-            cameraSurface.release();
-            cameraSurface = null;
-        }
-        if (cameraSurfaceTexture != null) {
-            cameraSurfaceTexture.setOnFrameAvailableListener(null);
-            cameraSurfaceTexture.release();
-            cameraSurfaceTexture = null;
-        }
+        releaseCameraSurface();
 
         int[] textures = new int[1];
         GLES20.glGenTextures(1, textures, 0);
@@ -107,6 +99,26 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     public void setCameraTexture(int textureId) {
         this.cameraTextureId = textureId;
         nativeSetCameraTexture(nativeHandle, textureId);
+    }
+
+    // Must be called on the GL thread after the camera has been stopped.
+    public void releaseCameraSurface() {
+        cameraFrameAvailable = false;
+        if (cameraSurface != null) {
+            cameraSurface.release();
+            cameraSurface = null;
+        }
+        if (cameraSurfaceTexture != null) {
+            cameraSurfaceTexture.setOnFrameAvailableListener(null);
+            cameraSurfaceTexture.release();
+            cameraSurfaceTexture = null;
+        }
+        if (cameraTextureId != 0) {
+            int[] textures = { cameraTextureId };
+            GLES20.glDeleteTextures(1, textures, 0);
+            cameraTextureId = 0;
+        }
+        nativeSetCameraTexture(nativeHandle, 0);
     }
 
     public void setCameraTextureTransform(float[] transform) {
