@@ -280,6 +280,11 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             vrRenderer.setHeadPitchListener(this::onVrHeadPitchChanged);
             vrSpatialScreenDistanceMeters = prefConfig.vrScreenDistanceMeters;
             vrSurfaceView.setEGLContextClientVersion(2);
+            // Keep the EGL context (and the decoder's SurfaceTexture-backed external OES
+            // texture) alive across Activity pause/resume. Recreating that texture while
+            // MediaCodec is still configured to its old Surface can destabilize hardware
+            // decoders on several Android GPU/codec combinations.
+            vrSurfaceView.setPreserveEGLContextOnPause(true);
             vrSurfaceView.setRenderer(vrRenderer);
             vrRenderer.setScreenDistance(vrSpatialScreenDistanceMeters);
             vrRenderer.setScreenSize(prefConfig.vrScreenSizeMultiplier);
