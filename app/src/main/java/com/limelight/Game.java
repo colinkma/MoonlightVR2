@@ -186,6 +186,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     private TextView performanceOverlayView;
 
     private MediaCodecDecoderRenderer decoderRenderer;
+    private Thread connectionStopThread;
     private boolean reportedCrash;
 
     private WifiManager.WifiLock highPerfWifiLock;
@@ -1147,6 +1148,25 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             unbindVrControlService();
             if (vrCameraManager != null) {
                 vrCameraManager.stopCamera();
+            }
+        }
+
+        // The VR SurfaceTexture is the active MediaCodec output target. Do not
+        // release it until NvConnection has stopped and the decoder workers have
+        // completed their teardown; otherwise the codec can write into a dead
+        // Surface during Activity destruction.
+        if (connectionStopThread != null) {
+            boolean interrupted = false;
+            while (connectionStopThread.isAlive()) {
+                try {
+                    connectionStopThread.join();
+                } catch (InterruptedException e) {
+                    interrupted = true;
+                }
+            }
+            connectionStopThread = null;
+            if (interrupted) {
+                Thread.currentThread().interrupt();
             }
         }
 
@@ -2571,11 +2591,8 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             // thread to keep things smooth for the UI. Inside moonlight-common,
             // we prevent another thread from starting a connection before and
             // during the process of stopping this one.
-            new Thread() {
-                public void run() {
-                    conn.stop();
-                }
-            }.start();
+            connectionStopThread = new Thread(() -> conn.stop(), "Moonlight - Stop connection");
+            connectionStopThread.start();
         }
     }
 
