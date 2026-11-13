@@ -4,6 +4,10 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.res.AssetManager;
 import android.graphics.SurfaceTexture;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import javax.microedition.khronos.egl.EGLConfig;
 import android.opengl.GLSurfaceView;
 import android.opengl.GLSurfaceView.Renderer;
@@ -63,6 +67,19 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     private SurfaceTexture cameraSurfaceTexture;
     private Surface cameraSurface;
     private volatile boolean cameraFrameAvailable = false;
+
+    private final SensorManager sensorManager;
+    private final Sensor rotationVectorSensor;
+    private final SensorEventListener magneticHeadingListener;
+    private volatile float magneticHeadingRadians = 0.0f;
+    private volatile float magneticHeadingAccuracyRadians = Float.MAX_VALUE;
+    private volatile int magneticHeadingSensorAccuracy = SensorManager.SENSOR_STATUS_UNRELIABLE;
+    private volatile long magneticHeadingTimestampNanos = 0L;
+    private long lastMagneticHeadingSentTimestampNanos = 0L;
+    private volatile int viewportRotation = Surface.ROTATION_0;
+    private boolean spatialModeRequested = false;
+    private boolean rendererResumed = false;
+    private boolean magneticHeadingRegistered = false;
 
     public Surface createCameraSurface() {
         releaseCameraSurface();
@@ -146,6 +163,59 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
         this.glSurfaceView = glSurfaceView;
         this.surfaceListener = surfaceListener;
         this.nativeHandle = nativeCreate(context, context.getAssets());
+        this.sensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
+        this.rotationVectorSensor = sensorManager != null
+                ? sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR) : null;
+        this.magneticHeadingListener = new SensorEventListener() {
+            @Override
+            public void onSensorChanged(SensorEvent event) {
+                if (event.sensor.getType() != Sensor.TYPE_ROTATION_VECTOR) return;
+                float[] sensorMatrix = new float[9];
+                float[] displayMatrix = new float[9];
+                float[] orientation = new float[3];
+                SensorManager.getRotationMatrixFromVector(sensorMatrix, event.values);
+
+                int axisX = SensorManager.AXIS_X;
+                int axisY = SensorManager.AXIS_Y;
+                switch (viewportRotation) {
+                    case Surface.ROTATION_90:
+                        axisX = SensorManager.AXIS_Y;
+                        axisY = SensorManager.AXIS_MINUS_X;
+                        break;
+                    case Surface.ROTATION_180:
+                        axisX = SensorManager.AXIS_MINUS_X;
+                        axisY = SensorManager.AXIS_MINUS_Y;
+                        break;
+                    case Surface.ROTATION_270:
+                        axisX = SensorManager.AXIS_MINUS_Y;
+                        axisY = SensorManager.AXIS_X;
+                        break;
+                    default:
+                        break;
+                }
+                if (!SensorManager.remapCoordinateSystem(
+                        sensorMatrix, axisX, axisY, displayMatrix)) {
+                    return;
+                }
+                SensorManager.getOrientation(displayMatrix, orientation);
+                if (!Float.isFinite(orientation[0])) return;
+
+                magneticHeadingRadians = orientation[0];
+                magneticHeadingAccuracyRadians = event.values.length > 4
+                        ? event.values[4] : Float.MAX_VALUE;
+                magneticHeadingSensorAccuracy = event.accuracy;
+                magneticHeadingTimestampNanos = event.timestamp != 0L
+                        ? event.timestamp : SystemClock.elapsedRealtimeNanos();
+            }
+
+            @Override
+            public void onAccuracyChanged(Sensor sensor, int accuracy) {
+                magneticHeadingSensorAccuracy = accuracy;
+            }
+        };
+        if (rotationVectorSensor == null) {
+            LimeLog.warning("Magnetic yaw correction unavailable: no rotation-vector sensor");
+        }
         for (int i = 0; i < 16; i++) {
             textureTransform[i] = (i % 5 == 0) ? 1f : 0f;
         }
@@ -176,6 +246,7 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
         // first captured world anchor always uses the live viewport frame.
         if (context instanceof Activity) {
             int rotation = ((Activity) context).getWindowManager().getDefaultDisplay().getRotation();
+            viewportRotation = rotation;
             nativeSetViewportOrientation(nativeHandle, rotation);
         }
         nativeOnSurfaceChanged(nativeHandle, width, height);
@@ -215,6 +286,13 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
                 LimeLog.warning("Error updating camera texture: " + e.getMessage());
             }
         }
+        long headingTimestamp = magneticHeadingTimestampNanos;
+        if (headingTimestamp != 0L &&
+                headingTimestamp != lastMagneticHeadingSentTimestampNanos) {
+            nativeSetMagneticHeading(nativeHandle, magneticHeadingRadians,
+                    magneticHeadingAccuracyRadians, magneticHeadingSensorAccuracy);
+            lastMagneticHeadingSentTimestampNanos = headingTimestamp;
+        }
         float headPitchDegrees = nativeOnDrawFrame(nativeHandle);
         boolean shouldLookDown = lookingDownForCamera
                 ? headPitchDegrees <= -CAMERA_EXIT_PITCH_DEGREES
@@ -242,6 +320,8 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
 
     public void onResume() {
         LimeLog.info("VrRenderer.onResume");
+        rendererResumed = true;
+        updateMagneticHeadingRegistration();
         glSurfaceView.onResume();
         // Keep Cardboard tracker state changes on the same GL thread that reads
         // its pose every frame. Calling pause/resume from the Activity thread
@@ -251,6 +331,8 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
 
     public void onPause() {
         LimeLog.info("VrRenderer.onPause");
+        rendererResumed = false;
+        updateMagneticHeadingRegistration();
         if (lookingDownForCamera) {
             lookingDownForCamera = false;
             HeadPitchListener listener = headPitchListener;
@@ -265,6 +347,9 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     }
 
     public void release() {
+        rendererResumed = false;
+        spatialModeRequested = false;
+        updateMagneticHeadingRegistration();
         if (cameraTextureId != 0) {
             int[] texture = new int[] { cameraTextureId };
             GLES20.glDeleteTextures(1, texture, 0);
@@ -313,7 +398,25 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     }
 
     public void setDisplayMode(final int mode) {
+        spatialModeRequested = mode == 1;
+        updateMagneticHeadingRegistration();
         glSurfaceView.queueEvent(() -> nativeSetDisplayMode(nativeHandle, mode));
+    }
+
+    private synchronized void updateMagneticHeadingRegistration() {
+        if (sensorManager == null || rotationVectorSensor == null) return;
+        boolean shouldRegister = spatialModeRequested && rendererResumed;
+        if (shouldRegister && !magneticHeadingRegistered) {
+            magneticHeadingRegistered = sensorManager.registerListener(
+                    magneticHeadingListener, rotationVectorSensor,
+                    SensorManager.SENSOR_DELAY_GAME);
+            if (!magneticHeadingRegistered) {
+                LimeLog.warning("Magnetic yaw correction unavailable: sensor registration failed");
+            }
+        } else if (!shouldRegister && magneticHeadingRegistered) {
+            sensorManager.unregisterListener(magneticHeadingListener);
+            magneticHeadingRegistered = false;
+        }
     }
 
     public void setViewportOrientation(final int rotation) {
@@ -566,6 +669,8 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     private native void nativeSetVideoAspectRatio(long handle, float aspectRatio);
     private native void nativeSetLensDistortionStrength(long handle, float strength);
     private native float nativeOnDrawFrame(long handle);
+    private native void nativeSetMagneticHeading(long handle, float headingRadians,
+            float headingAccuracyRadians, int sensorAccuracy);
     private native void nativeOnPause(long handle);
     private native void nativeOnResume(long handle);
     private native void nativeSetDisplayMode(long handle, int mode);
