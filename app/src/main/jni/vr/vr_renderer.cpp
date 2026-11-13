@@ -443,6 +443,13 @@ void VrMoonlightApp::SetDisplayMode(int mode) {
 }
 
 void VrMoonlightApp::SetViewportOrientation(int android_rotation) {
+  // CardboardHeadTracker_getPose() expresses every pose in this viewport frame.
+  // Once tracking has produced its first pose, changing the viewport frame
+  // without transforming the saved world anchor rotates the entire scene a
+  // second time (and can make a world-locked window appear head-locked).
+  // Keep the initial landscape frame stable for the lifetime of this tracker.
+  if (head_pose_frame_count_ > 0) return;
+
   switch (android_rotation) {
     case 0:
       viewport_orientation_ = kPortrait;
@@ -889,8 +896,9 @@ void VrMoonlightApp::RenderSpatialVideoToTexture() {
   glActiveTexture(GL_TEXTURE0); glUniform1i(sampler_uniform_,0);
   Matrix4x4 identity; for(int i=0;i<4;++i) identity.m[i][i]=1.f;
   const auto identity_gl=identity.ToGlArray();
-  const Matrix4x4 window_world=(window_locked_?window_anchor_matrix_:head_world_matrix_)*model_matrix_;
+  // Apply gaze-driven anchor/edit changes before building this frame's MVP.
   UpdateSpatialGaze();
+  const Matrix4x4 window_world=(window_locked_?window_anchor_matrix_:head_world_matrix_)*model_matrix_;
   const int left_width=screen_width_/2, right_width=screen_width_-left_width;
   const auto draw_eye=[&](CardboardEye eye,int x,int width) {
     if(width<=0||screen_height_<=0) return;
