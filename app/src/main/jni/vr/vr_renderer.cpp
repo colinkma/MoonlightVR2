@@ -139,6 +139,23 @@ const GLfloat kSpatialUiQuad[] = {
     -0.5f,-0.5f,0.f, 0.5f,-0.5f,0.f, -0.5f,0.5f,0.f,
     -0.5f,0.5f,0.f, 0.5f,-0.5f,0.f, 0.5f,0.5f,0.f
 };
+float WrapAngleRadians(float angle) {
+  constexpr float kPi = 3.14159265358979323846f;
+  return std::remainder(angle, 2.0f * kPi);
+}
+
+Matrix4x4 MakeYawRotation(float angle) {
+  Matrix4x4 rotation;
+  for (int i = 0; i < 4; ++i) rotation.m[i][i] = 1.0f;
+  const float cosine = std::cos(angle);
+  const float sine = std::sin(angle);
+  rotation.m[0][0] = cosine;
+  rotation.m[0][2] = sine;
+  rotation.m[2][0] = -sine;
+  rotation.m[2][2] = cosine;
+  return rotation;
+}
+
 bool InvertMatrix(const Matrix4x4& input, Matrix4x4& output) {
   float a[4][8] = {};
   for (int r=0;r<4;++r) { for (int c=0;c<4;++c) a[r][c]=input.m[r][c]; a[r][r+4]=1.f; }
@@ -411,6 +428,9 @@ void VrMoonlightApp::SetDisplayMode(int mode) {
     }
     if (head_tracker_ != nullptr) {
       display_mode_ = 1;
+      magnetic_yaw_reference_valid_ = false;
+      magnetic_yaw_correction_radians_ = 0.0f;
+      last_magnetic_yaw_update_nano_ = 0;
       toolbar_anchor_valid_ = false;
       spatial_controls_visible_ = true;
       last_spatial_controls_gaze_nano_ = 0;
@@ -465,6 +485,16 @@ void VrMoonlightApp::SetViewportOrientation(int android_rotation) {
       viewport_orientation_ = kLandscapeRight;
       break;
   }
+}
+
+void VrMoonlightApp::SetMagneticHeading(float headingRadians,
+                                        float headingAccuracyRadians,
+                                        int sensorAccuracy) {
+  if (!std::isfinite(headingRadians)) return;
+  magnetic_heading_radians_ = headingRadians;
+  magnetic_heading_accuracy_radians_ = headingAccuracyRadians;
+  magnetic_heading_sensor_accuracy_ = sensorAccuracy;
+  magnetic_heading_timestamp_nano_ = GetBootTimeNano();
 }
 
 void VrMoonlightApp::SetWindowLocked(bool locked) {
@@ -537,7 +567,60 @@ float VrMoonlightApp::OnDrawFrame() {
     const Quatf camera_to_world_orientation(
         -last_head_orientation_.x, -last_head_orientation_.y,
         -last_head_orientation_.z, last_head_orientation_.w);
-    head_world_matrix_ = camera_to_world_orientation.ToMatrix();
+    Matrix4x4 raw_head_world_matrix = camera_to_world_orientation.ToMatrix();
+    raw_head_world_matrix.m[0][3] = 0.0f;
+    raw_head_world_matrix.m[1][3] = 0.0f;
+    raw_head_world_matrix.m[2][3] = 0.0f;
+
+    // Cardboard's gravity reference cannot observe rotation around the
+    // vertical axis. Use Android's geomagnetic rotation vector as a slow,
+    // optional yaw reference; reject poor/stale readings and rate-limit every
+    // correction so magnetic interference cannot snap the video window.
+    const int64_t pose_now_nano = GetBootTimeNano();
+    const bool magnetic_heading_reliable =
+        magnetic_heading_timestamp_nano_ != 0 &&
+        pose_now_nano - magnetic_heading_timestamp_nano_ <= 750000000LL &&
+        magnetic_heading_sensor_accuracy_ >= 2 &&
+        std::isfinite(magnetic_heading_accuracy_radians_) &&
+        magnetic_heading_accuracy_radians_ <= 0.35f;
+    const float raw_camera_yaw = std::atan2(
+        raw_head_world_matrix.m[0][2], raw_head_world_matrix.m[2][2]);
+    if (magnetic_heading_reliable) {
+      if (!magnetic_yaw_reference_valid_) {
+        magnetic_heading_reference_radians_ = magnetic_heading_radians_;
+        cardboard_yaw_reference_radians_ = raw_camera_yaw;
+        magnetic_yaw_correction_radians_ = 0.0f;
+        magnetic_yaw_reference_valid_ = true;
+      } else {
+        const float magnetic_yaw_delta = -WrapAngleRadians(
+            magnetic_heading_radians_ - magnetic_heading_reference_radians_);
+        const float cardboard_yaw_delta = WrapAngleRadians(
+            raw_camera_yaw - cardboard_yaw_reference_radians_);
+        const float target_correction = WrapAngleRadians(
+            magnetic_yaw_delta - cardboard_yaw_delta);
+        const float correction_error = WrapAngleRadians(
+            target_correction - magnetic_yaw_correction_radians_);
+        // Large discontinuities are more likely magnetic disturbances than
+        // real short-term gyro drift. Ignore them instead of moving the scene.
+        if (std::fabs(correction_error) <= 0.70f) {
+          float dt = 0.0f;
+          if (last_magnetic_yaw_update_nano_ != 0) {
+            dt = std::clamp(
+                static_cast<float>(pose_now_nano -
+                                   last_magnetic_yaw_update_nano_) / 1.0e9f,
+                0.0f, 0.05f);
+          }
+          constexpr float kMaxMagneticYawCorrectionRate =
+              0.0872664626f;  // 5 degrees per second.
+          const float max_step = kMaxMagneticYawCorrectionRate * dt;
+          magnetic_yaw_correction_radians_ += std::clamp(
+              correction_error, -max_step, max_step);
+        }
+      }
+    }
+    last_magnetic_yaw_update_nano_ = pose_now_nano;
+    head_world_matrix_ = MakeYawRotation(magnetic_yaw_correction_radians_) *
+                         raw_head_world_matrix;
     head_world_matrix_.m[0][3] = 0.0f;
     head_world_matrix_.m[1][3] = 0.0f;
     head_world_matrix_.m[2][3] = 0.0f;
@@ -923,7 +1006,10 @@ void VrMoonlightApp::RenderSpatialVideoToTexture() {
     CardboardLensDistortion_getEyeFromHeadMatrix(lens_distortion_,eye,eye_gl);
     const Matrix4x4 projection=GetMatrixFromGlArray(projection_gl);
     const Matrix4x4 eye_from_head=GetMatrixFromGlArray(eye_gl);
-    const Matrix4x4 head_view=GetViewMatrixFromPose({0.f,0.f,0.f},last_head_orientation_);
+    Matrix4x4 head_view;
+    if (!InvertMatrix(head_world_matrix_, head_view)) {
+      head_view = GetViewMatrixFromPose({0.f,0.f,0.f},last_head_orientation_);
+    }
     const Matrix4x4 vp=projection*eye_from_head*head_view;
     const auto mvp=(vp*window_world).ToGlArray();
     glUniformMatrix4fv(texture_transform_uniform_,1,GL_FALSE,texture_transform_);
@@ -997,6 +1083,9 @@ void VrMoonlightApp::UpdateSpatialGaze() {
         CardboardHeadTracker_recenter(head_tracker_);
       }
       head_pitch_reference_valid_ = false;
+      magnetic_yaw_reference_valid_ = false;
+      magnetic_yaw_correction_radians_ = 0.0f;
+      last_magnetic_yaw_update_nano_ = 0;
       toolbar_anchor_valid_ = false;
       window_locked_ = true;
       window_lock_pending_ = true;
@@ -1227,6 +1316,9 @@ void VrMoonlightApp::DestroyCardboardResources() {
 
 void VrMoonlightApp::RecenterView() {
   head_pitch_reference_valid_ = false;
+  magnetic_yaw_reference_valid_ = false;
+  magnetic_yaw_correction_radians_ = 0.0f;
+  last_magnetic_yaw_update_nano_ = 0;
   recenter_dwell_seconds_ = 0.0f;
   last_recenter_frame_nano_ = 0;
   recenter_action_armed_ = true;
