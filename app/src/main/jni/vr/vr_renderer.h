@@ -118,6 +118,9 @@ class VrMoonlightApp {
   float cardboard_yaw_reference_radians_ = 0.0f;
   float magnetic_yaw_correction_radians_ = 0.0f;
   int64_t last_magnetic_yaw_update_nano_ = 0;
+  int64_t magnetic_yaw_stationary_since_nano_ = 0;
+  Matrix4x4 previous_raw_head_world_matrix_;
+  bool raw_head_world_valid_ = false;
   std::array<float, 3> last_head_position_ = {0.0f, 0.0f, 0.0f};
   Quatf last_head_orientation_ = Quatf(0.0f, 0.0f, 0.0f, 1.0f);
   // Camera look-down activation is measured relative to the pose when VR mode
