@@ -98,6 +98,7 @@ class VrMoonlightApp {
   bool window_locked_ = true;
   bool window_lock_pending_ = false;
   bool recenter_anchor_yaw_only_pending_ = false;
+  float recenter_anchor_vertical_offset_m_ = -0.07f;
   bool window_edit_mode_ = false;
   bool window_dragging_ = false;
   Matrix4x4 drag_start_head_matrix_;
