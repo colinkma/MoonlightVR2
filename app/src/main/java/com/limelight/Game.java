@@ -3149,7 +3149,6 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                 }
                 Surface cameraSurface = renderer.createCameraSurface();
                 if (requestGeneration != vrCameraRequestGeneration || !vrHeadLookingDown) {
-                    cameraSurface.release();
                     renderer.releaseCameraSurface();
                     return;
                 }
