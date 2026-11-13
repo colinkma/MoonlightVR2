@@ -97,6 +97,7 @@ class VrMoonlightApp {
   // the user select and reposition it with head rotation.
   bool window_locked_ = true;
   bool window_lock_pending_ = false;
+  bool recenter_anchor_yaw_only_pending_ = false;
   bool window_edit_mode_ = false;
   bool window_dragging_ = false;
   Matrix4x4 drag_start_head_matrix_;
