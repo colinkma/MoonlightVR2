@@ -96,6 +96,10 @@ class VrMoonlightApp {
   bool head_pose_valid_ = false;
   std::array<float, 3> last_head_position_ = {0.0f, 0.0f, 0.0f};
   Quatf last_head_orientation_ = Quatf(0.0f, 0.0f, 0.0f, 1.0f);
+  // Camera look-down activation is measured relative to the pose when VR mode
+  // starts, not the phone's absolute mounting angle in the viewer.
+  Quatf head_pitch_reference_orientation_ = Quatf(0.0f, 0.0f, 0.0f, 1.0f);
+  bool head_pitch_reference_valid_ = false;
   Matrix4x4 head_world_matrix_;
   Matrix4x4 window_anchor_matrix_;
   Matrix4x4 toolbar_anchor_matrix_;
