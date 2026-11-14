@@ -1102,14 +1102,21 @@ void VrMoonlightApp::UpdateSpatialGaze() {
   // Left control toggles window placement; the long track to its right is
   // the live screen-distance slider. Looking along the track sets distance
   // continuously from 1.0 m to 4.0 m.
-  if (control_ray_valid && std::fabs(local_y) < 0.11f) {
+  // Keep the hit band close to the visible track so brushing its edge
+  // does not alter distance. A stable gaze at one track position is required
+  // for five seconds before committing the selected distance.
+  if (control_ray_valid && std::fabs(local_y) < 0.045f) {
     if (local_x > -0.68f && local_x < -0.40f) {
       gaze_target_ = 0;
     } else if (local_x >= -0.16f && local_x <= 0.56f) {
       gaze_target_ = 1;
       const float slider_t = std::clamp((local_x + 0.16f) / 0.72f, 0.0f, 1.0f);
-      screen_distance_meters_ = 1.0f + slider_t * 3.0f;
-      UpdateModelMatrix();
+      const float requested_distance = 1.0f + slider_t * 3.0f;
+      if (std::fabs(requested_distance - gaze_pending_screen_distance_meters_) > 0.08f) {
+        gaze_pending_screen_distance_meters_ = requested_distance;
+        gaze_dwell_seconds_ = 0.0f;
+        gaze_action_armed_ = true;
+      }
     }
   }
 
@@ -1200,7 +1207,8 @@ void VrMoonlightApp::UpdateSpatialGaze() {
         }
         break;
       case 1:
-        // Distance is updated continuously from the slider's gaze position.
+        screen_distance_meters_ = gaze_pending_screen_distance_meters_;
+        UpdateModelMatrix();
         break;
     }
     gaze_action_armed_=false;
