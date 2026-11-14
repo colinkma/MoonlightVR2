@@ -66,12 +66,8 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     private int skyboxTextureId = 0;
     private int cameraTextureId = 0;
     private float[] cameraTextureTransform = new float[16];
-    private float[] cameraTransformScratch = new float[16];
-    private final float[] cameraRotationMatrix = new float[16];
-    // Rotation of the handset's screen plane relative to gravity. Used only
-    // to keep the passthrough image upright when the viewer is rolled.
-    private volatile float cameraTextureRollDegrees = 0.0f;
-    private volatile int cameraSensorOrientationDegrees = 90;
+    // Camera passthrough uses the SurfaceTexture transform only. It is kept
+    // independent of handset/display/head rotation.
     private SurfaceTexture cameraSurfaceTexture;
     private Surface cameraSurface;
     private volatile boolean cameraFrameAvailable = false;
@@ -114,29 +110,7 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
         cameraSurface = new Surface(cameraSurfaceTexture);
         setCameraTexture(cameraTextureId);
 
-        updateCameraRotationMatrix();
-
         return cameraSurface;
-    }
-
-    private void updateCameraRotationMatrix() {
-        Matrix.setIdentityM(cameraRotationMatrix, 0);
-        Matrix.translateM(cameraRotationMatrix, 0, 0.5f, 0.5f, 0f);
-        // Keep the camera preview in the same landscape baseline as the
-        // original working renderer. The camera sensor's 90-degree mounting
-        // correction is required even when Android reports ROTATION_90 for
-        // the landscape Activity; subtracting display rotation here cancels
-        // the correction and leaves the camera image portrait.
-        float cameraCorrectionDegrees = cameraSensorOrientationDegrees
-                - cameraTextureRollDegrees;
-        Matrix.rotateM(cameraRotationMatrix, 0,
-                cameraCorrectionDegrees, 0f, 0f, 1f);
-        Matrix.translateM(cameraRotationMatrix, 0, -0.5f, -0.5f, 0f);
-    }
-
-    public void setCameraSensorOrientationDegrees(int orientationDegrees) {
-        cameraSensorOrientationDegrees = ((orientationDegrees % 360) + 360) % 360;
-        glSurfaceView.requestRender();
     }
 
     public void setCameraTexture(int textureId) {
@@ -224,37 +198,6 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
                 SensorManager.getOrientation(displayMatrix, orientation);
                 if (!Float.isFinite(orientation[0])) return;
 
-                // Preserve the established physical-roll value used by the
-                // VR display. Do not replace this with Euler roll: that value
-                // changes the native display pose and broke the previously
-                // corrected screen orientation.
-                float gravityX = -sensorMatrix[6];
-                float gravityY = -sensorMatrix[7];
-                if (Float.isFinite(gravityX) && Float.isFinite(gravityY)) {
-                    float gravityInPlaneSquared =
-                            gravityX * gravityX + gravityY * gravityY;
-                    if (gravityInPlaneSquared > 0.04f) {
-                        float neutralLandscapeDegrees = 0.0f;
-                        if (viewportRotation == Surface.ROTATION_90) {
-                            neutralLandscapeDegrees = 90.0f;
-                        } else if (viewportRotation == Surface.ROTATION_270) {
-                            neutralLandscapeDegrees = -90.0f;
-                        } else if (viewportRotation == Surface.ROTATION_180) {
-                            neutralLandscapeDegrees = 180.0f;
-                        }
-                        float relativeRoll = (float) -Math.toDegrees(
-                                Math.atan2(gravityX, -gravityY)) - neutralLandscapeDegrees;
-                        while (relativeRoll > 180.0f) relativeRoll -= 360.0f;
-                        while (relativeRoll < -180.0f) relativeRoll += 360.0f;
-                        // Gravity-projected roll is only for correcting the camera texture.
-                        // Cardboard already supplies the head roll for the VR display; applying
-                        // this value to the screen model would rotate it a second time.
-                        cameraTextureRollDegrees = relativeRoll;
-                    } else {
-                        cameraTextureRollDegrees = 0.0f;
-                    }
-                }
-
                 magneticHeadingRadians = orientation[0];
                 // Keep the sensor's reported geomagnetic accuracy while the
                 // device is rolled. The camera image's independent gravity-
@@ -307,7 +250,6 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
         if (context instanceof Activity) {
             int rotation = ((Activity) context).getWindowManager().getDefaultDisplay().getRotation();
             viewportRotation = rotation;
-            updateCameraRotationMatrix();
             nativeSetViewportOrientation(nativeHandle, rotation);
         }
         nativeOnSurfaceChanged(nativeHandle, width, height);
@@ -339,9 +281,8 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
             try {
                 cameraSurfaceTexture.updateTexImage();
                 cameraSurfaceTexture.getTransformMatrix(cameraTextureTransform);
-                System.arraycopy(cameraTextureTransform, 0, cameraTransformScratch, 0, 16);
-                updateCameraRotationMatrix();
-                Matrix.multiplyMM(cameraTextureTransform, 0, cameraRotationMatrix, 0, cameraTransformScratch, 0);
+                // Do not rotate the camera buffer to match display or head pose.
+                // SurfaceTexture supplies the producer's buffer transform; use it unchanged.
                 nativeSetCameraTextureTransform(nativeHandle, cameraTextureTransform);
                 cameraFrameAvailable = false;
             } catch (Exception e) {
