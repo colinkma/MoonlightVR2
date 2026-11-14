@@ -202,7 +202,6 @@ class VrMoonlightApp {
   float screen_yaw_radians_ = 0.0f;
   float screen_pitch_radians_ = 0.0f;
   float screen_rotation_radians_ = 0.0f;
-  float device_roll_radians_ = 0.0f;
   float lens_scale_ = 1.0f;
   float lens_distortion_strength_ = 0.70f;
   float video_aspect_ratio_ = 16.0f / 9.0f;
