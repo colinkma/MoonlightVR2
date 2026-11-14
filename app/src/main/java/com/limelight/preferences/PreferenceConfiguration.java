@@ -85,6 +85,7 @@ public class PreferenceConfiguration {
     public static final String VR_ENABLE_CAMERA_PIP_PREF_STRING = "checkbox_enable_vr_camera_pip";
     public static final String VR_SPATIAL_MODE_PREF_STRING = "checkbox_enable_vr_spatial_mode";
     public static final String VR_CAMERA_PASSTHROUGH_PREF_STRING = "checkbox_enable_vr_camera_passthrough";
+    public static final String VR_CAMERA_ALWAYS_ON_PREF_STRING = "checkbox_enable_vr_camera_always_on";
     public static final String VR_CONTROLS_AUTO_HIDE_PREF_STRING = "checkbox_vr_controls_auto_hide";
     public static final float DEFAULT_VR_LENS_SCALE = 1.0f;
 
@@ -130,7 +131,7 @@ public class PreferenceConfiguration {
     private static final boolean DEFAULT_GAMEPAD_MOTION_SENSORS = true;
     private static final boolean DEFAULT_GAMEPAD_MOTION_FALLBACK = false;
     private static final int DEFAULT_VR_SCREEN_DISTANCE_INT = 20;
-    private static final int DEFAULT_VR_CAMERA_ZOOM_INT = 10;
+    private static final int DEFAULT_VR_CAMERA_ZOOM_INT = 80;
     private static final int DEFAULT_VR_LENS_DISTORTION_STRENGTH_INT = 70;
     private static final int DEFAULT_VR_SCREEN_SIZE_INT = 50;
     private static final int DEFAULT_VR_CURVATURE_MODE_INT = 0;
@@ -140,6 +141,7 @@ public class PreferenceConfiguration {
     private static final boolean DEFAULT_ENABLE_VR_CAMERA_PIP = false;
     private static final boolean DEFAULT_ENABLE_VR_SPATIAL_MODE = false;
     private static final boolean DEFAULT_ENABLE_VR_CAMERA_PASSTHROUGH = false;
+    private static final boolean DEFAULT_ENABLE_VR_CAMERA_ALWAYS_ON = false;
 
     public static final int FRAME_PACING_MIN_LATENCY = 0;
     public static final int FRAME_PACING_BALANCED = 1;
@@ -207,6 +209,7 @@ public class PreferenceConfiguration {
     public boolean enableVrCameraPip;
     public boolean enableVrSpatialMode;
     public boolean enableVrCameraPassthrough;
+    public boolean enableVrCameraAlwaysOn;
     public boolean vrControlsAutoHide;
 
     public static boolean isNativeResolution(int width, int height) {
@@ -650,8 +653,15 @@ public class PreferenceConfiguration {
         config.enableSkybox = prefs.getBoolean(ENABLE_SKYBOX_PREF_STRING, DEFAULT_ENABLE_SKYBOX);
         int vrDistanceRaw = prefs.getInt(VR_SCREEN_DISTANCE_PREF_STRING, DEFAULT_VR_SCREEN_DISTANCE_INT);
         config.vrScreenDistanceMeters = vrDistanceRaw / 10f;
-        config.vrCameraZoomRatio = prefs.getInt(VR_CAMERA_ZOOM_PREF_STRING,
-                DEFAULT_VR_CAMERA_ZOOM_INT) / 10f;
+        int cameraZoomRaw = prefs.getInt(VR_CAMERA_ZOOM_PREF_STRING,
+                DEFAULT_VR_CAMERA_ZOOM_INT);
+        // Migrate the former maximum (4x wider) to the new 8x request so
+        // existing users who had already maxed the old control get the wider
+        // field of view without having to revisit Settings.
+        if (cameraZoomRaw >= 40) {
+            cameraZoomRaw = 80;
+        }
+        config.vrCameraZoomRatio = cameraZoomRaw / 10f;
         int vrSizeRaw = prefs.getInt(VR_SCREEN_SIZE_PREF_STRING, DEFAULT_VR_SCREEN_SIZE_INT);
         config.vrScreenSizeMultiplier = vrSizeRaw / 50f;
         config.vrCurvatureMode = getCurvatureModeValue(prefs);
@@ -665,6 +675,7 @@ public class PreferenceConfiguration {
         config.enableVrCameraPip = prefs.getBoolean(VR_ENABLE_CAMERA_PIP_PREF_STRING, DEFAULT_ENABLE_VR_CAMERA_PIP);
         config.enableVrSpatialMode = prefs.getBoolean(VR_SPATIAL_MODE_PREF_STRING, DEFAULT_ENABLE_VR_SPATIAL_MODE);
         config.enableVrCameraPassthrough = prefs.getBoolean(VR_CAMERA_PASSTHROUGH_PREF_STRING, DEFAULT_ENABLE_VR_CAMERA_PASSTHROUGH);
+        config.enableVrCameraAlwaysOn = prefs.getBoolean(VR_CAMERA_ALWAYS_ON_PREF_STRING, DEFAULT_ENABLE_VR_CAMERA_ALWAYS_ON);
         config.vrControlsAutoHide = prefs.getBoolean(VR_CONTROLS_AUTO_HIDE_PREF_STRING, true);
         config.enablePip = prefs.getBoolean(ENABLE_PIP_PREF_STRING, DEFAULT_ENABLE_PIP);
         config.enablePerfOverlay = prefs.getBoolean(ENABLE_PERF_OVERLAY_STRING, DEFAULT_ENABLE_PERF_OVERLAY);
