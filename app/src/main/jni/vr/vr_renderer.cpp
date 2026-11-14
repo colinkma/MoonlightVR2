@@ -613,77 +613,11 @@ float VrMoonlightApp::OnDrawFrame() {
     raw_head_world_matrix.m[1][3] = 0.0f;
     raw_head_world_matrix.m[2][3] = 0.0f;
 
-    // Cardboard's gravity reference cannot observe rotation around the
-    // vertical axis. Use Android's geomagnetic rotation vector as a slow,
-    // optional yaw reference; reject poor/stale readings and rate-limit every
-    // correction so magnetic interference cannot snap the video window.
-    const int64_t pose_now_nano = GetBootTimeNano();
-    const bool magnetic_heading_reliable =
-        magnetic_heading_timestamp_nano_ != 0 &&
-        pose_now_nano - magnetic_heading_timestamp_nano_ <= 750000000LL &&
-        magnetic_heading_sensor_accuracy_ >= 2 &&
-        std::isfinite(magnetic_heading_accuracy_radians_) &&
-        magnetic_heading_accuracy_radians_ >= 0.0f &&
-        magnetic_heading_accuracy_radians_ <= 0.35f;
-    const float raw_camera_yaw = std::atan2(
-        raw_head_world_matrix.m[0][2], raw_head_world_matrix.m[2][2]);
-    float raw_pose_motion = 0.0f;
-    if (raw_head_world_valid_) {
-      for (int row = 0; row < 3; ++row) {
-        for (int col = 0; col < 3; ++col) {
-          raw_pose_motion += std::fabs(
-              raw_head_world_matrix.m[row][col] -
-              previous_raw_head_world_matrix_.m[row][col]);
-        }
-      }
-    } else {
-      raw_head_world_valid_ = true;
-    }
-    previous_raw_head_world_matrix_ = raw_head_world_matrix;
-    if (raw_pose_motion > 0.006f) {
-      magnetic_yaw_stationary_since_nano_ = 0;
-    } else if (magnetic_yaw_stationary_since_nano_ == 0) {
-      magnetic_yaw_stationary_since_nano_ = pose_now_nano;
-    }
-    const bool head_is_stationary =
-        magnetic_yaw_stationary_since_nano_ != 0 &&
-        pose_now_nano - magnetic_yaw_stationary_since_nano_ >= 300000000LL;
-    if (magnetic_heading_reliable && head_is_stationary) {
-      if (!magnetic_yaw_reference_valid_) {
-        magnetic_heading_reference_radians_ = magnetic_heading_radians_;
-        cardboard_yaw_reference_radians_ = raw_camera_yaw;
-        magnetic_yaw_correction_radians_ = 0.0f;
-        magnetic_yaw_reference_valid_ = true;
-      } else {
-        const float magnetic_yaw_delta = -WrapAngleRadians(
-            magnetic_heading_radians_ - magnetic_heading_reference_radians_);
-        const float cardboard_yaw_delta = WrapAngleRadians(
-            raw_camera_yaw - cardboard_yaw_reference_radians_);
-        const float target_correction = WrapAngleRadians(
-            magnetic_yaw_delta - cardboard_yaw_delta);
-        const float correction_error = WrapAngleRadians(
-            target_correction - magnetic_yaw_correction_radians_);
-        // Large discontinuities are more likely magnetic disturbances than
-        // real short-term gyro drift. Ignore them instead of moving the scene.
-        if (std::fabs(correction_error) <= 0.70f) {
-          float dt = 0.0f;
-          if (last_magnetic_yaw_update_nano_ != 0) {
-            dt = std::clamp(
-                static_cast<float>(pose_now_nano -
-                                   last_magnetic_yaw_update_nano_) / 1.0e9f,
-                0.0f, 0.05f);
-          }
-          constexpr float kMaxMagneticYawCorrectionRate =
-              0.0872664626f;  // 5 degrees per second.
-          const float max_step = kMaxMagneticYawCorrectionRate * dt;
-          magnetic_yaw_correction_radians_ += std::clamp(
-              correction_error, -max_step, max_step);
-        }
-      }
-    }
-    last_magnetic_yaw_update_nano_ = pose_now_nano;
-    head_world_matrix_ = MakeYawRotation(magnetic_yaw_correction_radians_) *
-                         raw_head_world_matrix;
+    // Use Cardboard's pose as the single source of truth for the spatial
+    // window transform. A second, independently sampled magnetic yaw signal
+    // changes the world frame while the headset is stationary and can make
+    // the anchored window appear to slide diagonally. Do not blend it here.
+    head_world_matrix_ = raw_head_world_matrix;
     head_world_matrix_.m[0][3] = 0.0f;
     head_world_matrix_.m[1][3] = 0.0f;
     head_world_matrix_.m[2][3] = 0.0f;
