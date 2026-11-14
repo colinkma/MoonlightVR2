@@ -1237,6 +1237,8 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             if (!prefConfig.enableVrSpatialMode) {
                 vrHeadLookingDown = false;
                 stopVrCameraPassthrough();
+            } else if (prefConfig.enableVrCameraAlwaysOn) {
+                maybeStartVrCamera();
             }
         }
     }
@@ -2458,7 +2460,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                 return;
             }
 
-            if (lookingDown) {
+            if (prefConfig.enableVrCameraAlwaysOn || lookingDown) {
                 maybeStartVrCamera();
             } else {
                 stopVrCameraPassthrough();
@@ -3143,9 +3145,16 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         }
     }
 
+    private boolean shouldRunVrCamera() {
+        return prefConfig != null
+                && prefConfig.enableVrSpatialMode
+                && prefConfig.enableVrCameraPassthrough
+                && (prefConfig.enableVrCameraAlwaysOn || vrHeadLookingDown);
+    }
+
     private void initVrCamera() {
         if (vrSurfaceView == null || vrRenderer == null || vrCameraManager == null
-                || vrCameraStartQueued) {
+                || !shouldRunVrCamera() || vrCameraStartQueued) {
             return;
         }
         final int requestGeneration = vrCameraRequestGeneration;
@@ -3155,11 +3164,11 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         vrCameraStartQueued = true;
         vrSurfaceView.queueEvent(() -> {
             try {
-                if (requestGeneration != vrCameraRequestGeneration || !vrHeadLookingDown) {
+                if (requestGeneration != vrCameraRequestGeneration || !shouldRunVrCamera()) {
                     return;
                 }
                 Surface cameraSurface = renderer.createCameraSurface();
-                if (requestGeneration != vrCameraRequestGeneration || !vrHeadLookingDown) {
+                if (requestGeneration != vrCameraRequestGeneration || !shouldRunVrCamera()) {
                     renderer.releaseCameraSurface();
                     return;
                 }
@@ -3168,7 +3177,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                     // repeating preview, and only if the original look-down
                     // request is still current.
                     if (requestGeneration != vrCameraRequestGeneration
-                            || !vrHeadLookingDown
+                            || !shouldRunVrCamera()
                             || prefConfig == null
                             || !prefConfig.enableVrSpatialMode
                             || !prefConfig.enableVrCameraPassthrough
@@ -3193,9 +3202,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
     private void maybeStartVrCamera() {
         if (!vrMode || vrRenderer == null || vrRenderSurface == null
-                || !vrHeadLookingDown || prefConfig == null
-                || !prefConfig.enableVrSpatialMode
-                || !prefConfig.enableVrCameraPassthrough) {
+                || !shouldRunVrCamera()) {
             return;
         }
         if (vrCameraManager == null) {
