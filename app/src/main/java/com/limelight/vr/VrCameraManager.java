@@ -37,6 +37,8 @@ public class VrCameraManager {
     private volatile int cameraSensorOrientationDegrees = 90;
     private String cameraPhysicalId;
     private Float cameraZoomRatio;
+    private Float logicalCameraZoomRatio;
+    private int logicalCameraSensorOrientationDegrees = 90;
     private Rect cameraCropRegion;
     // Every start/stop operation gets a new generation. Camera2 callbacks can
     // arrive after close(), so a boolean is not sufficient to distinguish an
@@ -85,24 +87,21 @@ public class VrCameraManager {
                 stopCamera();
                 return;
             }
-            CameraCharacteristics cameraCharacteristics = cameraManager.getCameraCharacteristics(
-                    cameraPhysicalId != null ? cameraPhysicalId : cameraId);
-            Integer sensorOrientation = cameraCharacteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
-            cameraSensorOrientationDegrees = sensorOrientation != null ? sensorOrientation : 90;
-            cameraZoomRatio = null;
-            // When a physical ultra-wide lens is selected below, route the
-            // Surface directly to that sensor. Do not apply logical-camera
-            // zoom on top of the physical lens or it may crop the wider view.
-            if (cameraPhysicalId == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                Range<Float> zoomRange = cameraCharacteristics.get(CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE);
-                if (zoomRange != null) {
-                    // Request the widest supported ratio; Camera2 clamps this
-                    // to the device's actual optical/digital zoom-out limit.
-                    float requestedRatio = 1.0f / Math.max(1.0f, requestedZoom);
-                    cameraZoomRatio = Math.max(zoomRange.getLower(),
-                            Math.min(requestedRatio, zoomRange.getUpper()));
-                }
-            }
+            CameraCharacteristics logicalCharacteristics =
+                    cameraManager.getCameraCharacteristics(cameraId);
+            Integer logicalOrientation = logicalCharacteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
+            logicalCameraSensorOrientationDegrees = logicalOrientation != null ? logicalOrientation : 90;
+            logicalCameraZoomRatio = getRequestedZoomRatio(logicalCharacteristics, requestedZoom);
+
+            CameraCharacteristics selectedCharacteristics = cameraPhysicalId != null
+                    ? cameraManager.getCameraCharacteristics(cameraPhysicalId)
+                    : logicalCharacteristics;
+            Integer sensorOrientation = selectedCharacteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
+            cameraSensorOrientationDegrees = sensorOrientation != null
+                    ? sensorOrientation : logicalCameraSensorOrientationDegrees;
+            // A physical ultra-wide output already uses its full sensor field
+            // of view. Keep the logical-camera zoom request for fallback only.
+            cameraZoomRatio = cameraPhysicalId == null ? logicalCameraZoomRatio : null;
             Log.i(TAG, "Selected rear camera logicalId=" + cameraId
                     + " physicalId=" + cameraPhysicalId
                     + " requestedZoomOut=" + requestedZoom
@@ -131,6 +130,18 @@ public class VrCameraManager {
             metric = Math.min(metric, focalLength / physicalSize.getWidth());
         }
         return metric;
+    }
+
+    private Float getRequestedZoomRatio(CameraCharacteristics characteristics, float requestedZoom) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            return null;
+        }
+        Range<Float> zoomRange = characteristics.get(CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE);
+        if (zoomRange == null) {
+            return null;
+        }
+        float requestedRatio = 1.0f / Math.max(1.0f, requestedZoom);
+        return Math.max(zoomRange.getLower(), Math.min(requestedRatio, zoomRange.getUpper()));
     }
 
     private String getRearCameraId() {
@@ -298,6 +309,8 @@ public class VrCameraManager {
                                         return;
                                     }
                                     cameraPhysicalId = null;
+                                    cameraZoomRatio = logicalCameraZoomRatio;
+                                    cameraSensorOrientationDegrees = logicalCameraSensorOrientationDegrees;
                                 }
                                 createCaptureSession(generation, device);
                             } else {
@@ -316,11 +329,19 @@ public class VrCameraManager {
         } catch (CameraAccessException | IllegalStateException | IllegalArgumentException e) {
             Log.e(TAG, "Failed to create camera capture session", e);
             synchronized (this) {
-                if (generation != cameraGeneration) {
+                if (generation != cameraGeneration || !isOpening) {
+                    return;
+                }
+                if (cameraPhysicalId != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    cameraPhysicalId = null;
+                    cameraZoomRatio = logicalCameraZoomRatio;
+                    cameraSensorOrientationDegrees = logicalCameraSensorOrientationDegrees;
+                } else {
+                    stopCameraForGeneration(generation);
                     return;
                 }
             }
-            stopCameraForGeneration(generation);
+            createCaptureSession(generation, device);
         }
     }
 
@@ -402,6 +423,7 @@ public class VrCameraManager {
         cameraManager = null;
         cameraCropRegion = null;
         cameraZoomRatio = null;
+        logicalCameraZoomRatio = null;
         cameraPhysicalId = null;
 
         if (oldSession != null) {
