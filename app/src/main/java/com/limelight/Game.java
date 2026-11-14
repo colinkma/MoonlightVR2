@@ -271,6 +271,11 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         tombstonePrefs = Game.this.getSharedPreferences("DecoderTombstone", 0);
         vrSurfaceView = findViewById(R.id.vrSurfaceView);
 
+        // Request target orientation before the VR GL renderer starts.
+        // Some devices apply USER_LANDSCAPE asynchronously; the later configuration
+        // callback will update Cardboard if the display rotation changes.
+        setPreferredOrientationForCurrentDisplay();
+
         vrMode = getIntent().getBooleanExtra(EXTRA_ENABLE_VR, false) ||
                 (prefConfig != null && prefConfig.enableVr);
         if (vrMode) {
@@ -676,7 +681,6 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         super.onConfigurationChanged(newConfig);
 
         // Set requested orientation for possible new screen size
-        setPreferredOrientationForCurrentDisplay();
         // Keep Cardboard's sensor-to-display transform in sync with rotations
         // handled in-place by this Activity (configChanges includes orientation).
         if (vrRenderer != null) {
