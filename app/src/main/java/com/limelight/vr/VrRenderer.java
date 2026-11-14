@@ -70,10 +70,6 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     private final float[] cameraRotationMatrix = new float[16];
     // Rotation of the handset's screen plane relative to gravity. Used only
     // to keep the passthrough image upright when the viewer is rolled.
-    // Physical roll used by the existing VR display pose path. Keep its
-    // gravity-projection calculation unchanged; camera texture orientation
-    // is tracked independently below.
-    private volatile float cameraGravityRotationDegrees = 0.0f;
     private volatile float cameraTextureRollDegrees = 0.0f;
     private volatile int cameraSensorOrientationDegrees = 90;
     private SurfaceTexture cameraSurfaceTexture;
@@ -250,13 +246,11 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
                                 Math.atan2(gravityX, -gravityY)) - neutralLandscapeDegrees;
                         while (relativeRoll > 180.0f) relativeRoll -= 360.0f;
                         while (relativeRoll < -180.0f) relativeRoll += 360.0f;
-                        // Both values use the handset's physical screen-plane
-                        // orientation relative to gravity. Keep them separate so
-                        // camera texture correction never changes the VR display pose.
-                        cameraGravityRotationDegrees = relativeRoll;
+                        // Gravity-projected roll is only for correcting the camera texture.
+                        // Cardboard already supplies the head roll for the VR display; applying
+                        // this value to the screen model would rotate it a second time.
                         cameraTextureRollDegrees = relativeRoll;
                     } else {
-                        cameraGravityRotationDegrees = 0.0f;
                         cameraTextureRollDegrees = 0.0f;
                     }
                 }
@@ -361,8 +355,6 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
                     magneticHeadingAccuracyRadians, magneticHeadingSensorAccuracy);
             lastMagneticHeadingSentTimestampNanos = headingTimestamp;
         }
-        nativeSetDeviceRoll(nativeHandle,
-                (float) Math.toRadians(cameraGravityRotationDegrees));
         float headPitchDegrees = nativeOnDrawFrame(nativeHandle);
         // Persist toolbar slider changes without exposing screen distance in
         // Settings. Writes occur only when the value actually changes.
@@ -761,7 +753,6 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     private native void nativeSetViewportOrientation(long handle, int rotation);
     private native void nativeSetWindowLocked(long handle, boolean locked);
     private native void nativeSetScreenDistance(long handle, float distanceMeters);
-    private native void nativeSetDeviceRoll(long handle, float radians);
     private native float nativeGetScreenDistance(long handle);
     private native void nativeSetScreenSize(long handle, float sizeMultiplier);
     private native void nativeAdjustScreenDistance(long handle, float deltaMeters);
