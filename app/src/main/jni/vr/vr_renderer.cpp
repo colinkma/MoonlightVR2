@@ -597,13 +597,13 @@ float VrMoonlightApp::OnDrawFrame() {
           magnetic_heading_accuracy_radians_);
     }
 
-    // Keep the world anchor as the inverse of the Cardboard NDK sample's
-    // head_view matrix. This is the convention that kept the window fixed
-    // in the known-good 2026.11.14.2 build.
-    const Quatf camera_to_world_orientation(
-        -last_head_orientation_.x, -last_head_orientation_.y,
-        -last_head_orientation_.z, last_head_orientation_.w);
-    Matrix4x4 raw_head_world_matrix = camera_to_world_orientation.ToMatrix();
+    // CardboardHeadTracker_getPose returns the head orientation in the
+    // Cardboard world frame (camera-to-world). Keep that forward transform
+    // for the persistent window anchor; derive the view matrix by inversion
+    // in RenderSpatialVideoToTexture(). Using the conjugate here makes the
+    // anchor rotate in the opposite direction and makes the window appear
+    // to slide when the user turns their head.
+    Matrix4x4 raw_head_world_matrix = last_head_orientation_.ToMatrix();
     raw_head_world_matrix.m[0][3] = 0.0f;
     raw_head_world_matrix.m[1][3] = 0.0f;
     raw_head_world_matrix.m[2][3] = 0.0f;
