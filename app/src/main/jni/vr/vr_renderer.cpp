@@ -1099,11 +1099,18 @@ void VrMoonlightApp::UpdateSpatialGaze() {
   }
 
   gaze_target_ = -1;
-  // The toolbar now contains only the window-placement toggle. Screen
-  // distance is adjusted exclusively by the Settings seek bar.
-  if (control_ray_valid && std::fabs(local_y) < 0.105f &&
-      std::fabs(local_x) < 0.145f) {
-    gaze_target_ = 0;
+  // Left control toggles window placement; the long track to its right is
+  // the live screen-distance slider. Looking along the track sets distance
+  // continuously from 1.0 m to 4.0 m.
+  if (control_ray_valid && std::fabs(local_y) < 0.11f) {
+    if (local_x > -0.68f && local_x < -0.40f) {
+      gaze_target_ = 0;
+    } else if (local_x >= -0.16f && local_x <= 0.56f) {
+      gaze_target_ = 1;
+      const float slider_t = std::clamp((local_x + 0.16f) / 0.72f, 0.0f, 1.0f);
+      screen_distance_meters_ = 1.0f + slider_t * 3.0f;
+      UpdateModelMatrix();
+    }
   }
 
   // Aiming into the strip immediately above the visible toolbar for two
@@ -1192,6 +1199,9 @@ void VrMoonlightApp::UpdateSpatialGaze() {
           window_lock_pending_=false;
         }
         break;
+      case 1:
+        // Distance is updated continuously from the slider's gaze position.
+        break;
     }
     gaze_action_armed_=false;
     gaze_dwell_seconds_=0.f;
@@ -1277,14 +1287,29 @@ void VrMoonlightApp::DrawSpatialControls(const Matrix4x4& vp) {
     const float locked_color[]={0.08f,0.28f,0.20f,1.f};
     const float edit_color[]={0.42f,0.22f,0.08f,1.f};
     const float white[]={0.9f,0.94f,1.f,1.f};
-    rect(0.f,0.f,0.025f,0.62f,0.27f,panel);
-    rect(0.f,0.f,0.035f,0.31f,0.20f,
+    rect(-0.06f,0.f,0.025f,1.08f,0.27f,panel);
+    rect(-0.54f,0.f,0.035f,0.25f,0.20f,
          gaze_target_==0?focus:(window_edit_mode_?edit_color:(window_locked_?locked_color:normal)));
     // Four corner marks indicate the spatial window placement/edit mode.
-    rect(-0.035f,0.025f,0.046f,0.012f,0.035f,white);
-    rect(0.035f,0.025f,0.046f,0.012f,0.035f,white);
-    rect(-0.035f,-0.025f,0.046f,0.012f,0.035f,white);
-    rect(0.035f,-0.025f,0.046f,0.012f,0.035f,white);
+    rect(-0.54f,0.025f,0.046f,0.012f,0.035f,white);
+    rect(-0.46f,0.025f,0.046f,0.012f,0.035f,white);
+    rect(-0.54f,-0.025f,0.046f,0.012f,0.035f,white);
+    rect(-0.46f,-0.025f,0.046f,0.012f,0.035f,white);
+
+    // Screen-distance slider: the filled segment and thumb reflect the
+    // actual world-space distance. Gaze position on the track adjusts it.
+    const float slider_min_x = -0.16f;
+    const float slider_max_x = 0.56f;
+    const float slider_t = std::clamp((screen_distance_meters_ - 1.0f) / 3.0f, 0.0f, 1.0f);
+    const float slider_x = slider_min_x + (slider_max_x - slider_min_x) * slider_t;
+    const float track_color[] = {0.20f,0.24f,0.30f,1.f};
+    const float fill_color[] = {0.12f,0.52f,0.88f,1.f};
+    rect((slider_min_x+slider_max_x)*0.5f,0.f,0.034f,
+         slider_max_x-slider_min_x,0.035f,track_color);
+    rect((slider_min_x+slider_x)*0.5f,0.f,0.038f,
+         std::max(0.002f,slider_x-slider_min_x),0.035f,fill_color);
+    rect(slider_x,0.f,0.043f,0.045f,0.13f,
+         gaze_target_==1?white:fill_color);
   }
 
   // Minimal gaze marker: a small dim point appears only while the
