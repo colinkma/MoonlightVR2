@@ -31,6 +31,7 @@ class VrMoonlightApp {
   void OnPause();
   void OnResume();
   void SetScreenDistance(float meters);
+  float GetScreenDistance() const;
   void SetDisplayMode(int mode);
   void SetViewportOrientation(int androidRotation);
   void SetMagneticHeading(float headingRadians, float headingAccuracyRadians,
