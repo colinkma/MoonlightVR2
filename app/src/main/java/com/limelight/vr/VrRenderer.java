@@ -70,7 +70,11 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     private final float[] cameraRotationMatrix = new float[16];
     // Rotation of the handset's screen plane relative to gravity. Used only
     // to keep the passthrough image upright when the viewer is rolled.
+    // Physical roll used by the existing VR display pose path. Keep its
+    // gravity-projection calculation unchanged; camera texture orientation
+    // is tracked independently below.
     private volatile float cameraGravityRotationDegrees = 0.0f;
+    private volatile float cameraTextureRollDegrees = 0.0f;
     private volatile int cameraSensorOrientationDegrees = 90;
     private SurfaceTexture cameraSurfaceTexture;
     private Surface cameraSurface;
@@ -133,7 +137,7 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
         // measured physical roll. Rear-camera correction subtracts that
         // device orientation from the sensor's mounting orientation.
         float cameraCorrectionDegrees = cameraSensorOrientationDegrees
-                - displayRotationDegrees - cameraGravityRotationDegrees;
+                - displayRotationDegrees - cameraTextureRollDegrees;
         Matrix.rotateM(cameraRotationMatrix, 0,
                 -cameraCorrectionDegrees, 0f, 0f, 1f);
         Matrix.translateM(cameraRotationMatrix, 0, -0.5f, -0.5f, 0f);
@@ -229,15 +233,39 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
                 SensorManager.getOrientation(displayMatrix, orientation);
                 if (!Float.isFinite(orientation[0])) return;
 
-                // Use Android's Euler roll from the rotation matrix after
-                // remapping it into the current display coordinate frame.
-                // Projecting gravity onto the handset's XY plane is incorrect:
-                // pitching the phone down changes that projection and was being
-                // mistaken for roll, leaving the camera preview sideways.
-                // orientation[2] is the remapped device roll and is independent
-                // of the pitch used to activate the look-down camera.
+                // Preserve the established physical-roll value used by the
+                // VR display. Do not replace this with Euler roll: that value
+                // changes the native display pose and broke the previously
+                // corrected screen orientation.
+                float gravityX = -sensorMatrix[6];
+                float gravityY = -sensorMatrix[7];
+                if (Float.isFinite(gravityX) && Float.isFinite(gravityY)) {
+                    float gravityInPlaneSquared =
+                            gravityX * gravityX + gravityY * gravityY;
+                    if (gravityInPlaneSquared > 0.04f) {
+                        float neutralLandscapeDegrees = 0.0f;
+                        if (viewportRotation == Surface.ROTATION_90) {
+                            neutralLandscapeDegrees = 90.0f;
+                        } else if (viewportRotation == Surface.ROTATION_270) {
+                            neutralLandscapeDegrees = -90.0f;
+                        } else if (viewportRotation == Surface.ROTATION_180) {
+                            neutralLandscapeDegrees = 180.0f;
+                        }
+                        float relativeRoll = (float) -Math.toDegrees(
+                                Math.atan2(gravityX, -gravityY)) - neutralLandscapeDegrees;
+                        while (relativeRoll > 180.0f) relativeRoll -= 360.0f;
+                        while (relativeRoll < -180.0f) relativeRoll += 360.0f;
+                        cameraGravityRotationDegrees = relativeRoll;
+                    } else {
+                        cameraGravityRotationDegrees = 0.0f;
+                    }
+                }
+
+                // Camera texture roll is separate from the display pose value.
+                // This is an isolated candidate for passthrough orientation and
+                // must not feed nativeSetDeviceRoll().
                 if (Float.isFinite(orientation[2])) {
-                    cameraGravityRotationDegrees =
+                    cameraTextureRollDegrees =
                             (float) -Math.toDegrees(orientation[2]);
                 }
 
