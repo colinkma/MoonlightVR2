@@ -212,10 +212,12 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
                 // upright even when the headset/phone is turned onto its side.
                 float gravityX = -displayMatrix[6];
                 float gravityY = -displayMatrix[7];
-                if (Float.isFinite(gravityX) && Float.isFinite(gravityY)
-                        && (gravityX * gravityX + gravityY * gravityY) > 0.04f) {
-                    cameraGravityRotationDegrees = (float) -Math.toDegrees(
-                            Math.atan2(gravityX, -gravityY));
+                if (Float.isFinite(gravityX) && Float.isFinite(gravityY)) {
+                    float gravityInPlaneSquared =
+                            gravityX * gravityX + gravityY * gravityY;
+                    cameraGravityRotationDegrees = gravityInPlaneSquared > 0.04f
+                            ? (float) -Math.toDegrees(Math.atan2(gravityX, -gravityY))
+                            : 0.0f;
                 }
 
                 magneticHeadingRadians = orientation[0];
