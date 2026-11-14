@@ -119,14 +119,24 @@ public class VrCameraManager {
                     continue;
                 }
                 float[] focalLengths = characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS);
-                float focalLength = focalLengths != null && focalLengths.length > 0
-                        ? focalLengths[0] : Float.MAX_VALUE;
+                android.util.SizeF physicalSize = characteristics.get(
+                        CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE);
+                float widestFieldMetric = Float.MAX_VALUE;
+                if (focalLengths != null && physicalSize != null
+                        && physicalSize.getWidth() > 0.0f) {
+                    for (float focalLength : focalLengths) {
+                        // Smaller focal-length / sensor-width means a wider
+                        // horizontal field of view. Prefer the widest rear lens.
+                        widestFieldMetric = Math.min(widestFieldMetric,
+                                focalLength / physicalSize.getWidth());
+                    }
+                }
                 // Prefer the rear ultra-wide module when the device exposes it
                 // as a separate camera ID. This is a real wider field of view,
                 // unlike shrinking the preview quad or cropping the sensor.
-                if (selectedCameraId == null || focalLength < shortestFocalLength) {
+                if (selectedCameraId == null || widestFieldMetric < shortestFocalLength) {
                     selectedCameraId = cameraId;
-                    shortestFocalLength = focalLength;
+                    shortestFocalLength = widestFieldMetric;
                 }
             }
             return selectedCameraId;
