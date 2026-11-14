@@ -66,8 +66,10 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     private int skyboxTextureId = 0;
     private int cameraTextureId = 0;
     private float[] cameraTextureTransform = new float[16];
-    // Camera passthrough uses the SurfaceTexture transform only. It is kept
-    // independent of handset/display/head rotation.
+    private final float[] cameraRotationMatrix = new float[16];
+    // Keep the rear camera image in the app's fixed landscape frame. This is
+    // a one-time sensor mounting correction, never a live head/device roll.
+    private volatile int cameraSensorOrientationDegrees = 90;
     private SurfaceTexture cameraSurfaceTexture;
     private Surface cameraSurface;
     private volatile boolean cameraFrameAvailable = false;
@@ -154,6 +156,22 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
         if (transform != null) {
             System.arraycopy(transform, 0, cameraTextureTransform, 0, 16);
         }
+    }
+
+    public void setCameraSensorOrientationDegrees(int orientationDegrees) {
+        cameraSensorOrientationDegrees = ((orientationDegrees % 360) + 360) % 360;
+        glSurfaceView.requestRender();
+    }
+
+    private void applyFixedLandscapeCameraTransform() {
+        Matrix.setIdentityM(cameraRotationMatrix, 0);
+        Matrix.translateM(cameraRotationMatrix, 0, 0.5f, 0.5f, 0f);
+        Matrix.rotateM(cameraRotationMatrix, 0,
+                cameraSensorOrientationDegrees, 0f, 0f, 1f);
+        Matrix.translateM(cameraRotationMatrix, 0, -0.5f, -0.5f, 0f);
+        float[] surfaceTransform = cameraTextureTransform.clone();
+        Matrix.multiplyMM(cameraTextureTransform, 0,
+                cameraRotationMatrix, 0, surfaceTransform, 0);
     }
 
     public VrRenderer(Context context, GLSurfaceView glSurfaceView, SurfaceListener surfaceListener) {
@@ -281,8 +299,9 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
             try {
                 cameraSurfaceTexture.updateTexImage();
                 cameraSurfaceTexture.getTransformMatrix(cameraTextureTransform);
-                // Do not rotate the camera buffer to match display or head pose.
-                // SurfaceTexture supplies the producer's buffer transform; use it unchanged.
+                // Apply only the camera sensor's fixed mounting correction so
+                // the passthrough remains landscape. Never follow live head/device roll.
+                applyFixedLandscapeCameraTransform();
                 nativeSetCameraTextureTransform(nativeHandle, cameraTextureTransform);
                 cameraFrameAvailable = false;
             } catch (Exception e) {
