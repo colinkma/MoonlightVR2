@@ -658,7 +658,7 @@ public class PreferenceConfiguration {
         // Migrate the former maximum (4x wider) to the new 8x request so
         // existing users who had already maxed the old control get the wider
         // field of view without having to revisit Settings.
-        if (cameraZoomRaw >= 40) {
+        if (cameraZoomRaw == 40) {
             cameraZoomRaw = 80;
         }
         config.vrCameraZoomRatio = cameraZoomRaw / 10f;
