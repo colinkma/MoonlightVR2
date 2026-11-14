@@ -126,13 +126,13 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     private void updateCameraRotationMatrix() {
         Matrix.setIdentityM(cameraRotationMatrix, 0);
         Matrix.translateM(cameraRotationMatrix, 0, 0.5f, 0.5f, 0f);
-        // Preserve the established rear-camera default: a 90-degree sensor
-        // mounting orientation is corrected with a +90-degree texture rotation.
-        // The previous negative sign inverted this baseline and made the
-        // camera preview start in the wrong orientation.
-        float displayRotationDegrees = viewportRotation * 90.0f;
+        // Keep the camera preview in the same landscape baseline as the
+        // original working renderer. The camera sensor's 90-degree mounting
+        // correction is required even when Android reports ROTATION_90 for
+        // the landscape Activity; subtracting display rotation here cancels
+        // the correction and leaves the camera image portrait.
         float cameraCorrectionDegrees = cameraSensorOrientationDegrees
-                - displayRotationDegrees - cameraTextureRollDegrees;
+                - cameraTextureRollDegrees;
         Matrix.rotateM(cameraRotationMatrix, 0,
                 cameraCorrectionDegrees, 0f, 0f, 1f);
         Matrix.translateM(cameraRotationMatrix, 0, -0.5f, -0.5f, 0f);
