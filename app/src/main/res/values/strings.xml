@@ -253,9 +253,9 @@
     <string name="title_seekbar_vr_screen_distance">VR screen distance</string>
     <string name="summary_seekbar_vr_screen_distance">Adjust the floating screen distance from the toolbar above the screen.</string>
     <string name="suffix_seekbar_vr_distance">m</string>
-    <string name="title_seekbar_vr_camera_zoom">Camera field of view</string>
-    <string name="summary_seekbar_vr_camera_zoom">Reduce rear-camera magnification to show a wider field of view. Higher values request a wider view (below 1x) when the camera supports it.</string>
-    <string name="suffix_seekbar_vr_camera_zoom">x</string>
+    <string name="title_seekbar_vr_camera_zoom">Camera zoom-out / wider view</string>
+    <string name="summary_seekbar_vr_camera_zoom">Move the slider higher to zoom OUT and make objects smaller. The app requests a sub-1x camera zoom ratio or selects the widest available rear lens.</string>
+    <string name="suffix_seekbar_vr_camera_zoom">x wider</string>
     <string name="title_seekbar_vr_screen_size">VR screen size</string>
     <string name="summary_seekbar_vr_screen_size">Adjust the size of the virtual screen.</string>
     <string name="title_list_vr_curvature_mode">VR curvature preset</string>
