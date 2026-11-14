@@ -1221,6 +1221,10 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             vrRenderer.onResume();
             prefConfig = PreferenceConfiguration.readPreferences(this);
             refreshLensLockPreference();
+            // Apply Settings changes made while the stream Activity was paused.
+            // Screen distance is a spatial-window setting, not a camera control.
+            vrSpatialScreenDistanceMeters = prefConfig.vrScreenDistanceMeters;
+            vrRenderer.setScreenDistance(vrSpatialScreenDistanceMeters);
             vrRenderer.setDisplayMode(prefConfig.enableVrSpatialMode ? 1 : 0);
             vrRenderer.setViewportOrientation(getWindowManager().getDefaultDisplay().getRotation());
             if (prefConfig.enableVrCameraPassthrough) {
