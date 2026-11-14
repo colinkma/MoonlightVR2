@@ -3187,9 +3187,11 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                             || vrRenderer != renderer) {
                         return;
                     }
-                    // Camera passthrough is deliberately rendered with the
-                    // SurfaceTexture buffer transform only; sensor/display
-                    // rotation must not be applied to this fixed image.
+                    // Apply the rear sensor's fixed mounting angle once.
+                    // This keeps the camera image landscape without tracking
+                    // handset roll, display changes, or headset movement.
+                    renderer.setCameraSensorOrientationDegrees(
+                            cameraManager.getCameraSensorOrientationDegrees());
                     renderer.setCameraEnabled(true);
                 }));
             } finally {
