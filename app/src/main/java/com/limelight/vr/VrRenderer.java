@@ -71,6 +71,7 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     // Rotation of the handset's screen plane relative to gravity. Used only
     // to keep the passthrough image upright when the viewer is rolled.
     private volatile float cameraGravityRotationDegrees = 0.0f;
+    private volatile int cameraSensorOrientationDegrees = 90;
     private SurfaceTexture cameraSurfaceTexture;
     private Surface cameraSurface;
     private volatile boolean cameraFrameAvailable = false;
@@ -124,9 +125,16 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
         // Texture coordinates map output pixels back to the camera buffer,
         // so the sampling transform must rotate opposite to the world-space
         // screen correction. Using the same sign rotates the preview the wrong way.
+        float displayRotationDegrees = viewportRotation * 90.0f;
+        float cameraCorrectionDegrees = cameraGravityRotationDegrees
+                + cameraSensorOrientationDegrees - displayRotationDegrees;
         Matrix.rotateM(cameraRotationMatrix, 0,
-                -cameraGravityRotationDegrees, 0f, 0f, 1f);
+                -cameraCorrectionDegrees, 0f, 0f, 1f);
         Matrix.translateM(cameraRotationMatrix, 0, -0.5f, -0.5f, 0f);
+    }
+
+    public void setCameraSensorOrientationDegrees(int orientationDegrees) {
+        cameraSensorOrientationDegrees = ((orientationDegrees % 360) + 360) % 360;
     }
 
     public void setCameraTexture(int textureId) {
