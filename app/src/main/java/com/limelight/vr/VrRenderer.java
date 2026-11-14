@@ -129,8 +129,11 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
         // display's natural-orientation rotation. cameraGravityRotationDegrees
         // is the additional physical roll relative to that neutral display pose.
         float displayRotationDegrees = viewportRotation * 90.0f;
+        // Device orientation is the display's neutral rotation plus the
+        // measured physical roll. Rear-camera correction subtracts that
+        // device orientation from the sensor's mounting orientation.
         float cameraCorrectionDegrees = cameraSensorOrientationDegrees
-                - displayRotationDegrees + cameraGravityRotationDegrees;
+                - displayRotationDegrees - cameraGravityRotationDegrees;
         Matrix.rotateM(cameraRotationMatrix, 0,
                 -cameraCorrectionDegrees, 0f, 0f, 1f);
         Matrix.translateM(cameraRotationMatrix, 0, -0.5f, -0.5f, 0f);
