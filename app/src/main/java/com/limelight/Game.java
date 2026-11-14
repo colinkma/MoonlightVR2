@@ -3177,6 +3177,10 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                     }
                     renderer.setCameraEnabled(true);
                 }));
+                // Camera ID selection and SENSOR_ORIENTATION lookup happen
+                // synchronously before the asynchronous Camera2 open request.
+                renderer.setCameraSensorOrientationDegrees(
+                        cameraManager.getCameraSensorOrientationDegrees());
             } finally {
                 runOnUiThread(() -> {
                     if (requestGeneration == vrCameraRequestGeneration) {
