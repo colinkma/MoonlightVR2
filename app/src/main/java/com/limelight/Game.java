@@ -3184,6 +3184,11 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                             || vrRenderer != renderer) {
                         return;
                     }
+                    // Read the final sensor orientation after Camera2 has
+                    // configured either the selected physical ultra-wide lens
+                    // or the logical-camera fallback.
+                    renderer.setCameraSensorOrientationDegrees(
+                            cameraManager.getCameraSensorOrientationDegrees());
                     renderer.setCameraEnabled(true);
                 }));
                 // Camera ID selection and SENSOR_ORIENTATION lookup happen
