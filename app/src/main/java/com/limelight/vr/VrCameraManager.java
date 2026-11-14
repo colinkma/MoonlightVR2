@@ -120,14 +120,29 @@ public class VrCameraManager {
 
     private float getWideFieldMetric(CameraCharacteristics characteristics) {
         float[] focalLengths = characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS);
-        android.util.SizeF physicalSize = characteristics.get(
-                CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE);
-        if (focalLengths == null || physicalSize == null || physicalSize.getWidth() <= 0.0f) {
+        if (focalLengths == null || focalLengths.length == 0) {
             return Float.MAX_VALUE;
         }
+
+        android.util.SizeF physicalSize = characteristics.get(
+                CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE);
         float metric = Float.MAX_VALUE;
-        for (float focalLength : focalLengths) {
-            metric = Math.min(metric, focalLength / physicalSize.getWidth());
+        if (physicalSize != null && physicalSize.getWidth() > 0.0f) {
+            // Focal length divided by sensor width approximates horizontal
+            // field-of-view: a smaller value means a wider lens.
+            for (float focalLength : focalLengths) {
+                metric = Math.min(metric, focalLength / physicalSize.getWidth());
+            }
+        } else {
+            // Some vendor camera HALs omit SENSOR_INFO_PHYSICAL_SIZE for
+            // physical members of a logical multi-camera. Returning MAX_VALUE
+            // here made every such ultra-wide lens lose to the first logical
+            // camera, so the preview silently stayed on the normal lens.
+            // Focal length is an imperfect cross-sensor proxy, but is a better
+            // fallback than discarding the lens entirely.
+            for (float focalLength : focalLengths) {
+                metric = Math.min(metric, focalLength);
+            }
         }
         return metric;
     }
@@ -157,6 +172,8 @@ public class VrCameraManager {
                 }
 
                 float logicalMetric = getWideFieldMetric(characteristics);
+                Log.i(TAG, "Rear logical lens candidate id=" + cameraId
+                        + " fieldMetric=" + logicalMetric);
                 if (selectedCameraId == null || logicalMetric < widestFieldMetric) {
                     selectedCameraId = cameraId;
                     selectedPhysicalId = null;
@@ -179,6 +196,9 @@ public class VrCameraManager {
                                 continue;
                             }
                             float physicalMetric = getWideFieldMetric(physical);
+                            Log.i(TAG, "Rear physical lens candidate logicalId=" + cameraId
+                                    + " physicalId=" + physicalId
+                                    + " fieldMetric=" + physicalMetric);
                             if (physicalMetric < widestFieldMetric) {
                                 selectedCameraId = cameraId;
                                 selectedPhysicalId = physicalId;
