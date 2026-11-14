@@ -74,10 +74,6 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           GRADLE_OPTS=""
-          BRANCH_NAME="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
-          if [[ "$BRANCH_NAME" == "main" || "$BRANCH_NAME" == "refs/heads/main" || "$BRANCH_NAME" == main ]]; then
-            GRADLE_OPTS="-PincludeX64"
-          fi
 
           if [[ -n "$ANDROID_KEYSTORE_BASE64" && -n "$ANDROID_KEYSTORE_PASSWORD" && -n "$ANDROID_KEY_ALIAS" && -n "$ANDROID_KEY_PASSWORD" ]]; then
             GRADLE_OPTS="$GRADLE_OPTS -PMOONLIGHTVR_STORE_FILE=$RUNNER_TEMP/moonlightvr-ci.keystore"
