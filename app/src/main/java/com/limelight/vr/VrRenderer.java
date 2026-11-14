@@ -255,18 +255,15 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
                                 Math.atan2(gravityX, -gravityY)) - neutralLandscapeDegrees;
                         while (relativeRoll > 180.0f) relativeRoll -= 360.0f;
                         while (relativeRoll < -180.0f) relativeRoll += 360.0f;
+                        // Both values use the handset's physical screen-plane
+                        // orientation relative to gravity. Keep them separate so
+                        // camera texture correction never changes the VR display pose.
                         cameraGravityRotationDegrees = relativeRoll;
+                        cameraTextureRollDegrees = relativeRoll;
                     } else {
                         cameraGravityRotationDegrees = 0.0f;
+                        cameraTextureRollDegrees = 0.0f;
                     }
-                }
-
-                // Camera texture roll is separate from the display pose value.
-                // This is an isolated candidate for passthrough orientation and
-                // must not feed nativeSetDeviceRoll().
-                if (Float.isFinite(orientation[2])) {
-                    cameraTextureRollDegrees =
-                            (float) -Math.toDegrees(orientation[2]);
                 }
 
                 magneticHeadingRadians = orientation[0];
