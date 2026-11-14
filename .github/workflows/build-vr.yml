@@ -8,6 +8,12 @@ on:
       - feature/spatial-window-camera
   workflow_dispatch:
 
+# Keep only the newest build for each branch. Several rapid commits should
+# not start multiple Gradle release builds that will later be discarded.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
