@@ -184,7 +184,7 @@ public class VrCameraManager {
                                 selectedPhysicalId = physicalId;
                                 widestFieldMetric = physicalMetric;
                             }
-                        } catch (IllegalArgumentException ignored) {
+                        } catch (CameraAccessException | IllegalArgumentException ignored) {
                             // Some vendors expose physical IDs without
                             // exposing their individual characteristics.
                         }
