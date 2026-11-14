@@ -4,6 +4,7 @@ name: Build MoonlightVR
 on:
   push:
     branches:
+      - main
       - feature/spatial-window-camera
   workflow_dispatch:
 
