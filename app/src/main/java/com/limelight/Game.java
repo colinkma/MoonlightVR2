@@ -3151,6 +3151,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         final int requestGeneration = vrCameraRequestGeneration;
         final VrRenderer renderer = vrRenderer;
         final VrCameraManager cameraManager = vrCameraManager;
+        final float cameraZoomRatio = prefConfig.vrCameraZoomRatio;
         vrCameraStartQueued = true;
         vrSurfaceView.queueEvent(() -> {
             try {
@@ -3162,7 +3163,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                     renderer.releaseCameraSurface();
                     return;
                 }
-                cameraManager.startCamera(cameraSurface, () -> runOnUiThread(() -> {
+                cameraManager.startCamera(cameraSurface, cameraZoomRatio, () -> runOnUiThread(() -> {
                     // Enable the camera layer only after Camera2 has an active
                     // repeating preview, and only if the original look-down
                     // request is still current.
