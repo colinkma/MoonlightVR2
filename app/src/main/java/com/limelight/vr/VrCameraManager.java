@@ -13,6 +13,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.util.Log;
+import android.graphics.Rect;
 import android.view.Surface;
 
 import java.util.Collections;
@@ -31,6 +32,7 @@ public class VrCameraManager {
     private volatile boolean isStarted = false;
     private volatile boolean isOpening = false;
     private volatile Runnable onStartedListener;
+    private Rect cameraCropRegion;
     // Every start/stop operation gets a new generation. Camera2 callbacks can
     // arrive after close(), so a boolean is not sufficient to distinguish an
     // old open request from a newer one.
@@ -44,7 +46,7 @@ public class VrCameraManager {
         return isStarted || isOpening;
     }
 
-    public synchronized void startCamera(Surface surface, Runnable onStartedListener) {
+    public synchronized void startCamera(Surface surface, float requestedZoom, Runnable onStartedListener) {
         if (isStarted || isOpening) {
             Log.w(TAG, "Camera already started");
             return;
@@ -74,6 +76,7 @@ public class VrCameraManager {
                 stopCamera();
                 return;
             }
+            cameraCropRegion = createZoomCropRegion(cameraId, requestedZoom);
 
             cameraManager.openCamera(cameraId, createStateCallback(generation), cameraHandler);
         } catch (CameraAccessException | SecurityException e) {
@@ -95,6 +98,30 @@ public class VrCameraManager {
             Log.e(TAG, "Failed to get camera list", e);
         }
         return null;
+    }
+
+    private Rect createZoomCropRegion(String cameraId, float requestedZoom) {
+        try {
+            CameraCharacteristics characteristics =
+                    cameraManager.getCameraCharacteristics(cameraId);
+            Rect activeArray = characteristics.get(
+                    CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
+            Float maxZoomValue = characteristics.get(
+                    CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM);
+            if (activeArray == null) {
+                return null;
+            }
+            float maxZoom = maxZoomValue != null ? maxZoomValue : 1.0f;
+            float zoom = Math.max(1.0f, Math.min(requestedZoom, maxZoom));
+            int cropWidth = Math.max(1, Math.round(activeArray.width() / zoom));
+            int cropHeight = Math.max(1, Math.round(activeArray.height() / zoom));
+            int left = activeArray.centerX() - cropWidth / 2;
+            int top = activeArray.centerY() - cropHeight / 2;
+            return new Rect(left, top, left + cropWidth, top + cropHeight);
+        } catch (CameraAccessException e) {
+            Log.e(TAG, "Failed to calculate camera zoom crop", e);
+            return null;
+        }
     }
 
     private CameraDevice.StateCallback createStateCallback(final int generation) {
@@ -213,6 +240,9 @@ public class VrCameraManager {
             previewRequest.addTarget(targetSurface);
             previewRequest.set(CaptureRequest.CONTROL_AF_MODE,
                     CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO);
+            if (cameraCropRegion != null) {
+                previewRequest.set(CaptureRequest.SCALER_CROP_REGION, cameraCropRegion);
+            }
             session.setRepeatingRequest(previewRequest.build(), null, targetHandler);
 
             Runnable listener;
@@ -275,6 +305,7 @@ public class VrCameraManager {
         cameraThread = null;
         cameraHandler = null;
         cameraManager = null;
+        cameraCropRegion = null;
 
         if (oldSession != null) {
             try {
