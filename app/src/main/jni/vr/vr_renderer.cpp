@@ -597,13 +597,18 @@ float VrMoonlightApp::OnDrawFrame() {
           magnetic_heading_accuracy_radians_);
     }
 
-    // CardboardHeadTracker_getPose returns the head orientation in the
-    // Cardboard world frame (camera-to-world). Keep that forward transform
-    // for the persistent window anchor; derive the view matrix by inversion
-    // in RenderSpatialVideoToTexture(). Using the conjugate here makes the
-    // anchor rotate in the opposite direction and makes the window appear
-    // to slide when the user turns their head.
-    Matrix4x4 raw_head_world_matrix = last_head_orientation_.ToMatrix();
+    // Quatf::ToMatrix() follows this project's Cardboard sample convention:
+    // it produces world-to-head (view) orientation, as used by
+    // GetViewMatrixFromPose(). The persistent anchor needs the inverse
+    // head-to-world transform. Derive it from the same helper used by the
+    // rendering fallback so the anchor and per-frame view cannot disagree.
+    const Matrix4x4 head_view_from_pose =
+        GetViewMatrixFromPose({0.0f, 0.0f, 0.0f}, last_head_orientation_);
+    Matrix4x4 raw_head_world_matrix;
+    if (!InvertMatrix(head_view_from_pose, raw_head_world_matrix)) {
+      VR_LOGE("Unable to invert Cardboard head view for world anchor");
+      return head_pitch_degrees_;
+    }
     raw_head_world_matrix.m[0][3] = 0.0f;
     raw_head_world_matrix.m[1][3] = 0.0f;
     raw_head_world_matrix.m[2][3] = 0.0f;
