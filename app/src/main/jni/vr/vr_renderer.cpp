@@ -1433,6 +1433,14 @@ float VrMoonlightApp::GetScreenDistance() const {
   return screen_distance_meters_;
 }
 
+void VrMoonlightApp::SetDeviceRollRadians(float radians) {
+  if (!std::isfinite(radians)) {
+    return;
+  }
+  device_roll_radians_ = radians;
+  UpdateModelMatrix();
+}
+
 void VrMoonlightApp::AdjustScreenDistance(float deltaMeters) {
   screen_distance_meters_ += deltaMeters;
   if (screen_distance_meters_ < kMinScreenDistanceMeters) {
@@ -1548,8 +1556,9 @@ void VrMoonlightApp::UpdateModelMatrix() {
 
   Matrix4x4 local_rot;
   for (int i = 0; i < 16; ++i) local_rot.m[i/4][i%4] = (i%5 == 0) ? 1.0f : 0.0f;
-  float cos_r = std::cos(screen_rotation_radians_);
-  float sin_r = std::sin(screen_rotation_radians_);
+  const float combined_rotation = screen_rotation_radians_ + device_roll_radians_;
+  float cos_r = std::cos(combined_rotation);
+  float sin_r = std::sin(combined_rotation);
   local_rot.m[0][0] = cos_r;  local_rot.m[0][1] = -sin_r;
   local_rot.m[1][0] = sin_r;  local_rot.m[1][1] = cos_r;
 
