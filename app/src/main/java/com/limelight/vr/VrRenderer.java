@@ -214,8 +214,11 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
                 // Project gravity into the display plane. Use the measured
                 // roll directly: a fixed 90-degree offset leaves the camera
                 // image sideways when the handset is returned to portrait.
-                float gravityX = -displayMatrix[6];
-                float gravityY = -displayMatrix[7];
+                // Use the handset's physical axes, not the app viewport
+                // axes. The VR Activity can remain landscape-locked while the
+                // phone itself is turned upright or onto its side.
+                float gravityX = -sensorMatrix[6];
+                float gravityY = -sensorMatrix[7];
                 if (Float.isFinite(gravityX) && Float.isFinite(gravityY)) {
                     float gravityInPlaneSquared =
                             gravityX * gravityX + gravityY * gravityY;
@@ -323,6 +326,8 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
                     magneticHeadingAccuracyRadians, magneticHeadingSensorAccuracy);
             lastMagneticHeadingSentTimestampNanos = headingTimestamp;
         }
+        nativeSetDeviceRoll(nativeHandle,
+                (float) Math.toRadians(cameraGravityRotationDegrees));
         float headPitchDegrees = nativeOnDrawFrame(nativeHandle);
         // Persist toolbar slider changes without exposing screen distance in
         // Settings. Writes occur only when the value actually changes.
@@ -721,6 +726,7 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     private native void nativeSetViewportOrientation(long handle, int rotation);
     private native void nativeSetWindowLocked(long handle, boolean locked);
     private native void nativeSetScreenDistance(long handle, float distanceMeters);
+    private native void nativeSetDeviceRoll(long handle, float radians);
     private native float nativeGetScreenDistance(long handle);
     private native void nativeSetScreenSize(long handle, float sizeMultiplier);
     private native void nativeAdjustScreenDistance(long handle, float deltaMeters);
