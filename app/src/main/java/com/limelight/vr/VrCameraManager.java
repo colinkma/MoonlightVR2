@@ -14,6 +14,7 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.util.Log;
 import android.graphics.Rect;
+import android.util.Range;
 import android.view.Surface;
 
 import java.util.Collections;
@@ -32,6 +33,8 @@ public class VrCameraManager {
     private volatile boolean isStarted = false;
     private volatile boolean isOpening = false;
     private volatile Runnable onStartedListener;
+    private volatile int cameraSensorOrientationDegrees = 90;
+    private Float cameraZoomRatio;
     private Rect cameraCropRegion;
     // Every start/stop operation gets a new generation. Camera2 callbacks can
     // arrive after close(), so a boolean is not sufficient to distinguish an
@@ -40,6 +43,10 @@ public class VrCameraManager {
 
     public VrCameraManager(Context context) {
         this.context = context;
+    }
+
+    public int getCameraSensorOrientationDegrees() {
+        return cameraSensorOrientationDegrees;
     }
 
     public synchronized boolean isStarted() {
@@ -76,7 +83,23 @@ public class VrCameraManager {
                 stopCamera();
                 return;
             }
-            cameraCropRegion = createZoomCropRegion(cameraId, requestedZoom);
+            CameraCharacteristics cameraCharacteristics = cameraManager.getCameraCharacteristics(cameraId);
+            Integer sensorOrientation = cameraCharacteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
+            cameraSensorOrientationDegrees = sensorOrientation != null ? sensorOrientation : 90;
+            cameraZoomRatio = null;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                Range<Float> zoomRange = cameraCharacteristics.get(CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE);
+                if (zoomRange != null) {
+                    // The preference is a 1x-to-4x zoom-out factor. Values above
+                    // 1 request a ratio below 1x (wider field of view).
+                    float requestedRatio = 1.0f / Math.max(1.0f, requestedZoom);
+                    cameraZoomRatio = Math.max(zoomRange.getLower(),
+                            Math.min(requestedRatio, zoomRange.getUpper()));
+                }
+            }
+            cameraCropRegion = cameraZoomRatio == null
+                    ? createZoomOutCompatibleCameraSelectionCrop(cameraId, requestedZoom)
+                    : null;
 
             cameraManager.openCamera(cameraId, createStateCallback(generation), cameraHandler);
         } catch (CameraAccessException | SecurityException e) {
@@ -87,41 +110,37 @@ public class VrCameraManager {
 
     private String getRearCameraId() {
         try {
+            String selectedCameraId = null;
+            float shortestFocalLength = Float.MAX_VALUE;
             for (String cameraId : cameraManager.getCameraIdList()) {
                 CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(cameraId);
                 Integer facing = characteristics.get(CameraCharacteristics.LENS_FACING);
-                if (facing != null && facing == CameraCharacteristics.LENS_FACING_BACK) {
-                    return cameraId;
+                if (facing == null || facing != CameraCharacteristics.LENS_FACING_BACK) {
+                    continue;
+                }
+                float[] focalLengths = characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS);
+                float focalLength = focalLengths != null && focalLengths.length > 0
+                        ? focalLengths[0] : Float.MAX_VALUE;
+                // Prefer the rear ultra-wide module when the device exposes it
+                // as a separate camera ID. This is a real wider field of view,
+                // unlike shrinking the preview quad or cropping the sensor.
+                if (selectedCameraId == null || focalLength < shortestFocalLength) {
+                    selectedCameraId = cameraId;
+                    shortestFocalLength = focalLength;
                 }
             }
+            return selectedCameraId;
         } catch (CameraAccessException e) {
             Log.e(TAG, "Failed to get camera list", e);
         }
         return null;
     }
 
-    private Rect createZoomCropRegion(String cameraId, float requestedZoom) {
-        try {
-            CameraCharacteristics characteristics =
-                    cameraManager.getCameraCharacteristics(cameraId);
-            Rect activeArray = characteristics.get(
-                    CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
-            Float maxZoomValue = characteristics.get(
-                    CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM);
-            if (activeArray == null) {
-                return null;
-            }
-            float maxZoom = maxZoomValue != null ? maxZoomValue : 1.0f;
-            float zoom = Math.max(1.0f, Math.min(requestedZoom, maxZoom));
-            int cropWidth = Math.max(1, Math.round(activeArray.width() / zoom));
-            int cropHeight = Math.max(1, Math.round(activeArray.height() / zoom));
-            int left = activeArray.centerX() - cropWidth / 2;
-            int top = activeArray.centerY() - cropHeight / 2;
-            return new Rect(left, top, left + cropWidth, top + cropHeight);
-        } catch (CameraAccessException e) {
-            Log.e(TAG, "Failed to calculate camera zoom crop", e);
-            return null;
-        }
+    private Rect createZoomOutCompatibleCameraSelectionCrop(String cameraId, float requestedZoom) {
+        // Camera2 crop regions cannot extend beyond the active sensor array.
+        // On pre-Android-11 devices, use the widest rear camera available and
+        // leave it uncropped rather than silently zooming further in.
+        return null;
     }
 
     private CameraDevice.StateCallback createStateCallback(final int generation) {
@@ -240,7 +259,9 @@ public class VrCameraManager {
             previewRequest.addTarget(targetSurface);
             previewRequest.set(CaptureRequest.CONTROL_AF_MODE,
                     CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO);
-            if (cameraCropRegion != null) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && cameraZoomRatio != null) {
+                previewRequest.set(CaptureRequest.CONTROL_ZOOM_RATIO, cameraZoomRatio);
+            } else if (cameraCropRegion != null) {
                 previewRequest.set(CaptureRequest.SCALER_CROP_REGION, cameraCropRegion);
             }
             session.setRepeatingRequest(previewRequest.build(), null, targetHandler);
@@ -306,6 +327,7 @@ public class VrCameraManager {
         cameraHandler = null;
         cameraManager = null;
         cameraCropRegion = null;
+        cameraZoomRatio = null;
 
         if (oldSession != null) {
             try {
