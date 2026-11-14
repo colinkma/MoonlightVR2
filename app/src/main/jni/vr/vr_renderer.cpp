@@ -714,6 +714,11 @@ float VrMoonlightApp::OnDrawFrame() {
       } else {
         window_anchor_matrix_ = head_world_matrix_;
       }
+      VR_LOGE("World anchor captured: viewport=%d poseFrames=%llu q=(%.4f,%.4f,%.4f,%.4f)",
+              static_cast<int>(viewport_orientation_),
+              static_cast<unsigned long long>(head_pose_frame_count_),
+              last_head_orientation_.x, last_head_orientation_.y,
+              last_head_orientation_.z, last_head_orientation_.w);
       window_lock_pending_ = false;
     }
 
