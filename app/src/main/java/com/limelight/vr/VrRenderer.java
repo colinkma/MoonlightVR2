@@ -126,20 +126,15 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     private void updateCameraRotationMatrix() {
         Matrix.setIdentityM(cameraRotationMatrix, 0);
         Matrix.translateM(cameraRotationMatrix, 0, 0.5f, 0.5f, 0f);
-        // Texture coordinates map output pixels back to the camera buffer,
-        // so the sampling transform must rotate opposite to the world-space
-        // screen correction. Using the same sign rotates the preview the wrong way.
-        // Camera2's rear-camera correction is sensor orientation minus the
-        // display's natural-orientation rotation. cameraGravityRotationDegrees
-        // is the additional physical roll relative to that neutral display pose.
+        // Preserve the established rear-camera default: a 90-degree sensor
+        // mounting orientation is corrected with a +90-degree texture rotation.
+        // The previous negative sign inverted this baseline and made the
+        // camera preview start in the wrong orientation.
         float displayRotationDegrees = viewportRotation * 90.0f;
-        // Device orientation is the display's neutral rotation plus the
-        // measured physical roll. Rear-camera correction subtracts that
-        // device orientation from the sensor's mounting orientation.
         float cameraCorrectionDegrees = cameraSensorOrientationDegrees
                 - displayRotationDegrees - cameraTextureRollDegrees;
         Matrix.rotateM(cameraRotationMatrix, 0,
-                -cameraCorrectionDegrees, 0f, 0f, 1f);
+                cameraCorrectionDegrees, 0f, 0f, 1f);
         Matrix.translateM(cameraRotationMatrix, 0, -0.5f, -0.5f, 0f);
     }
 
