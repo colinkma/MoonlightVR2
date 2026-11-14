@@ -1105,14 +1105,18 @@ void VrMoonlightApp::UpdateSpatialGaze() {
   // Keep the hit band close to the visible track so brushing its edge
   // does not alter distance. A stable gaze at one track position is required
   // for five seconds before committing the selected distance.
-  if (control_ray_valid && std::fabs(local_y) < 0.045f) {
+  if (control_ray_valid && std::fabs(local_y) < 0.022f) {
     if (local_x > -0.68f && local_x < -0.40f) {
       gaze_target_ = 0;
     } else if (local_x >= -0.16f && local_x <= 0.56f) {
       gaze_target_ = 1;
       const float slider_t = std::clamp((local_x + 0.16f) / 0.72f, 0.0f, 1.0f);
       const float requested_distance = 1.0f + slider_t * 3.0f;
-      if (std::fabs(requested_distance - gaze_pending_screen_distance_meters_) > 0.08f) {
+      // Require the gaze to remain on essentially the same point of the
+      // track for the full dwell. Merely brushing the edge or glancing across
+      // the slider cannot commit a new distance.
+      if (std::fabs(local_x - gaze_pending_slider_local_x_) > 0.025f) {
+        gaze_pending_slider_local_x_ = local_x;
         gaze_pending_screen_distance_meters_ = requested_distance;
         gaze_dwell_seconds_ = 0.0f;
         gaze_action_armed_ = true;
