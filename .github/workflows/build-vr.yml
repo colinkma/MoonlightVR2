@@ -7,6 +7,8 @@ on:
   push:
     branches:
       - feature/spatial-window-camera
+    paths-ignore:
+      - .github/workflows/build-vr.yml
 
 jobs:
   build:
