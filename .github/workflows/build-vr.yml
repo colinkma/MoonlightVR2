@@ -109,11 +109,18 @@ jobs:
           # GITHUB_TOKEN cannot create a release tag at a commit whose workflow
           # files differ from the default branch. Anchor the release tag to main;
           # the release notes identify the exact feature-branch source commit.
-          gh release create "$RELEASE_TAG" "$APK_NAME" \
-            --target "main" \
-            --title "MoonlightVR ${BUILD_LABEL}" \
-            --notes "Signed Android release APK. App version: ${BUILD_LABEL}. APK source branch: ${GITHUB_REF_NAME}. APK source commit: ${GITHUB_SHA}. Download the APK directly." \
-            --prerelease
+          RELEASE_NOTES="Signed Android release APK. App version: ${BUILD_LABEL}. APK source branch: ${GITHUB_REF_NAME}. APK source commit: ${GITHUB_SHA}. Download the APK directly."
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" \
+              --target "main" \
+              --title "MoonlightVR ${BUILD_LABEL}" \
+              --notes "$RELEASE_NOTES" \
+              --prerelease
+          fi
+          # Reuse the versioned release when it already exists, replacing only
+          # the APK asset so reruns cannot fail on an existing release tag.
+          gh release upload "$RELEASE_TAG" "$APK_NAME" --clobber
+          gh release edit "$RELEASE_TAG" --title "MoonlightVR ${BUILD_LABEL}" --notes "$RELEASE_NOTES" --prerelease
 
       - name: Summary
         run: |
