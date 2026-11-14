@@ -1099,30 +1099,16 @@ void VrMoonlightApp::UpdateSpatialGaze() {
   }
 
   gaze_target_ = -1;
-  // Left control toggles window placement; the long track to its right is
-  // the live screen-distance slider. Looking along the track sets distance
-  // continuously from 1.0 m to 4.0 m.
-  // Keep the hit band close to the visible track so brushing its edge
-  // does not alter distance. A stable gaze at one track position is required
-  // for five seconds before committing the selected distance.
-  if (control_ray_valid && std::fabs(local_y) < 0.022f) {
+  // Three generous gaze targets: placement mode, move screen closer, and
+  // move screen farther. The two distance buttons use broad hit areas so
+  // Cardboard head-gaze does not need pixel-precise aiming.
+  if (control_ray_valid && std::fabs(local_y) < 0.13f) {
     if (local_x > -0.68f && local_x < -0.40f) {
       gaze_target_ = 0;
-    } else if (local_x >= -0.16f && local_x <= 0.56f) {
+    } else if (local_x >= -0.24f && local_x <= 0.02f) {
       gaze_target_ = 1;
-      const float slider_t = std::clamp((local_x + 0.16f) / 0.72f, 0.0f, 1.0f);
-      const float requested_distance = 1.0f + slider_t * 3.0f;
-      // Require the gaze to remain on essentially the same point of the
-      // track for the full dwell. Merely brushing the edge or glancing across
-      // the slider cannot commit a new distance.
-      if (!gaze_pending_slider_position_valid_ ||
-          std::fabs(local_x - gaze_pending_slider_local_x_) > 0.025f) {
-        gaze_pending_slider_local_x_ = local_x;
-        gaze_pending_screen_distance_meters_ = requested_distance;
-        gaze_pending_slider_position_valid_ = true;
-        gaze_dwell_seconds_ = 0.0f;
-        gaze_action_armed_ = true;
-      }
+    } else if (local_x >= 0.10f && local_x <= 0.36f) {
+      gaze_target_ = 2;
     }
   }
 
@@ -1213,7 +1199,13 @@ void VrMoonlightApp::UpdateSpatialGaze() {
         }
         break;
       case 1:
-        screen_distance_meters_ = gaze_pending_screen_distance_meters_;
+        screen_distance_meters_ = std::max(kMinScreenDistanceMeters,
+                screen_distance_meters_ - 0.2f);
+        UpdateModelMatrix();
+        break;
+      case 2:
+        screen_distance_meters_ = std::min(kMaxScreenDistanceMeters,
+                screen_distance_meters_ + 0.2f);
         UpdateModelMatrix();
         break;
     }
@@ -1310,20 +1302,19 @@ void VrMoonlightApp::DrawSpatialControls(const Matrix4x4& vp) {
     rect(-0.54f,-0.025f,0.046f,0.012f,0.035f,white);
     rect(-0.46f,-0.025f,0.046f,0.012f,0.035f,white);
 
-    // Screen-distance slider: the filled segment and thumb reflect the
-    // actual world-space distance. Gaze position on the track adjusts it.
-    const float slider_min_x = -0.16f;
-    const float slider_max_x = 0.56f;
-    const float slider_t = std::clamp((screen_distance_meters_ - 1.0f) / 3.0f, 0.0f, 1.0f);
-    const float slider_x = slider_min_x + (slider_max_x - slider_min_x) * slider_t;
-    const float track_color[] = {0.20f,0.24f,0.30f,1.f};
-    const float fill_color[] = {0.12f,0.52f,0.88f,1.f};
-    rect((slider_min_x+slider_max_x)*0.5f,0.f,0.034f,
-         slider_max_x-slider_min_x,0.035f,track_color);
-    rect((slider_min_x+slider_x)*0.5f,0.f,0.038f,
-         std::max(0.002f,slider_x-slider_min_x),0.035f,fill_color);
-    rect(slider_x,0.f,0.043f,0.045f,0.13f,
-         gaze_target_==1?white:fill_color);
+    // Large, separate minus/plus buttons control spatial screen distance.
+    const float button_color[] = {0.12f,0.18f,0.25f,1.f};
+    const float active_color[] = {0.08f,0.38f,0.72f,1.f};
+    const float symbol_color[] = {0.92f,0.96f,1.f,1.f};
+    const float minus_x = -0.11f;
+    const float plus_x = 0.23f;
+    rect(minus_x,0.f,0.040f,0.22f,0.19f,
+         gaze_target_==1?active_color:button_color);
+    rect(plus_x,0.f,0.040f,0.22f,0.19f,
+         gaze_target_==2?active_color:button_color);
+    rect(minus_x,0.f,0.048f,0.105f,0.018f,symbol_color);
+    rect(plus_x,0.f,0.048f,0.105f,0.018f,symbol_color);
+    rect(plus_x,0.f,0.048f,0.018f,0.105f,symbol_color);
   }
 
   // Minimal gaze marker: a small dim point appears only while the
