@@ -64,10 +64,10 @@
             android:dependency="checkbox_enable_vr_spatial_mode"
             android:dialogMessage="@string/summary_seekbar_vr_camera_zoom"
             seekbar:min="10"
-            android:max="40"
+            android:max="80"
             seekbar:step="1"
             seekbar:divisor="10"
-            android:defaultValue="10"
+            android:defaultValue="80"
             android:summary="@string/summary_seekbar_vr_camera_zoom"
             android:text="@string/suffix_seekbar_vr_camera_zoom"
             android:title="@string/title_seekbar_vr_camera_zoom" />
@@ -76,6 +76,12 @@
             android:dependency="checkbox_enable_vr_spatial_mode"
             android:title="@string/title_checkbox_enable_vr_camera_passthrough"
             android:summary="@string/summary_checkbox_enable_vr_camera_passthrough"
+            android:defaultValue="false" />
+        <CheckBoxPreference
+            android:key="checkbox_enable_vr_camera_always_on"
+            android:dependency="checkbox_enable_vr_camera_passthrough"
+            android:title="@string/title_checkbox_enable_vr_camera_always_on"
+            android:summary="@string/summary_checkbox_enable_vr_camera_always_on"
             android:defaultValue="false" />
         <com.limelight.preferences.SeekBarPreference
             android:key="seekbar_vr_lens_distortion_strength"
