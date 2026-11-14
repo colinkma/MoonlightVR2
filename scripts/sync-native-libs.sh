@@ -4,7 +4,7 @@ set -euo pipefail
 # Rehydrate the eight large prebuilt native libraries that GitHub's Contents
 # API cannot transfer inline. Pin to the exact source commit used for import.
 readonly SOURCE_COMMIT="a431efc251985b228189c015e2cdbf3c314d232b"
-readonly BASE_URL="https://raw.githubusercontent.com/colinkma/moonlightvr/${SOURCE_COMMIT}"
+readonly BASE_URL="https://raw.githubusercontent.com/Florke64/moonlightvr/${SOURCE_COMMIT}"
 
 declare -A EXPECTED_BLOB_SHA=(
   ["app/src/main/jni/moonlight-core/libopus/arm64-v8a/libopus.a"]="979eba04c2d61353914426293874dce3c7ac1c61"
