@@ -660,6 +660,7 @@ public class PreferenceConfiguration {
         // field of view without having to revisit Settings.
         if (cameraZoomRaw == 40) {
             cameraZoomRaw = 80;
+            prefs.edit().putInt(VR_CAMERA_ZOOM_PREF_STRING, cameraZoomRaw).apply();
         }
         config.vrCameraZoomRatio = cameraZoomRaw / 10f;
         int vrSizeRaw = prefs.getInt(VR_SCREEN_SIZE_PREF_STRING, DEFAULT_VR_SCREEN_SIZE_INT);
