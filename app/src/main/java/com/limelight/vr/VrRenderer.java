@@ -24,6 +24,7 @@ import android.graphics.BitmapFactory;
 import android.opengl.GLUtils;
 
 import com.limelight.LimeLog;
+import com.limelight.preferences.PreferenceConfiguration;
 
 import javax.microedition.khronos.opengles.GL10;
 
@@ -322,6 +323,20 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
             lastMagneticHeadingSentTimestampNanos = headingTimestamp;
         }
         float headPitchDegrees = nativeOnDrawFrame(nativeHandle);
+        // Persist toolbar slider changes without exposing screen distance in
+        // Settings. Writes occur only when the value actually changes.
+        float currentScreenDistance = nativeGetScreenDistance(nativeHandle);
+        int storedDistance = Math.round(currentScreenDistance * 10.0f);
+        int previousStoredDistance = context.getSharedPreferences(
+                PreferenceConfiguration.class.getSimpleName(), Context.MODE_PRIVATE)
+                .getInt(PreferenceConfiguration.VR_SCREEN_DISTANCE_PREF_STRING, 20);
+        if (storedDistance != previousStoredDistance) {
+            context.getSharedPreferences(
+                    PreferenceConfiguration.class.getSimpleName(), Context.MODE_PRIVATE)
+                    .edit()
+                    .putInt(PreferenceConfiguration.VR_SCREEN_DISTANCE_PREF_STRING, storedDistance)
+                    .apply();
+        }
         boolean shouldLookDown = lookingDownForCamera
                 ? headPitchDegrees <= -CAMERA_EXIT_PITCH_DEGREES
                 : headPitchDegrees <= -CAMERA_ENTER_PITCH_DEGREES;
@@ -707,6 +722,7 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     private native void nativeSetViewportOrientation(long handle, int rotation);
     private native void nativeSetWindowLocked(long handle, boolean locked);
     private native void nativeSetScreenDistance(long handle, float distanceMeters);
+    private native float nativeGetScreenDistance(long handle);
     private native void nativeSetScreenSize(long handle, float sizeMultiplier);
     private native void nativeAdjustScreenDistance(long handle, float deltaMeters);
     private native void nativeAdjustScreenSize(long handle, float deltaMultiplier);
