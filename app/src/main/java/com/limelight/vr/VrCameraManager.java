@@ -85,7 +85,7 @@ public class VrCameraManager {
         cameraHandler = new Handler(cameraThread.getLooper());
 
         try {
-            String cameraId = getRearCameraId();
+            String cameraId = getRearCameraId(requestedZoom);
             if (cameraId == null) {
                 Log.e(TAG, "No rear camera found");
                 stopCamera();
@@ -122,34 +122,27 @@ public class VrCameraManager {
         }
     }
 
-    private float getWideFieldMetric(CameraCharacteristics characteristics) {
-        float[] focalLengths = characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS);
+    private float getWideFieldMetric(CameraCharacteristics characteristics,
+                                      float fallbackSensorWidthMm) {
+        float[] focalLengths = characteristics.get(
+                CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS);
         if (focalLengths == null || focalLengths.length == 0) {
             return Float.MAX_VALUE;
         }
 
         android.util.SizeF physicalSize = characteristics.get(
                 CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE);
+        float sensorWidthMm = physicalSize != null && physicalSize.getWidth() > 0.0f
+                ? physicalSize.getWidth() : fallbackSensorWidthMm;
+        if (sensorWidthMm <= 0.0f) {
+            // Do not compare a focal length against an invented sensor size:
+            // that can incorrectly rank a telephoto or main lens as ultra-wide.
+            return Float.MAX_VALUE;
+        }
+
         float metric = Float.MAX_VALUE;
-        if (physicalSize != null && physicalSize.getWidth() > 0.0f) {
-            // Focal length divided by sensor width approximates horizontal
-            // field-of-view: a smaller value means a wider lens.
-            for (float focalLength : focalLengths) {
-                metric = Math.min(metric, focalLength / physicalSize.getWidth());
-            }
-        } else {
-            // Some vendor camera HALs omit SENSOR_INFO_PHYSICAL_SIZE for
-            // physical members of a logical multi-camera. Returning MAX_VALUE
-            // here made every such ultra-wide lens lose to the first logical
-            // camera, so the preview silently stayed on the normal lens.
-            // Focal length is an imperfect cross-sensor proxy, but is a better
-            // fallback than discarding the lens entirely.
-            // Use a conservative 10 mm sensor-width estimate to keep
-            // this fallback on roughly the same scale as focalLength /
-            // sensorWidth metrics from cameras that report physical size.
-            for (float focalLength : focalLengths) {
-                metric = Math.min(metric, focalLength / 10.0f);
-            }
+        for (float focalLength : focalLengths) {
+            metric = Math.min(metric, focalLength / sensorWidthMm);
         }
         return metric;
     }
@@ -173,61 +166,97 @@ public class VrCameraManager {
         return appliedRatio;
     }
 
-    private String getRearCameraId() {
+    private String getRearCameraId(float requestedZoom) {
         try {
+            String baseCameraId = null;
+            float baseFieldMetric = Float.MAX_VALUE;
             String selectedCameraId = null;
             String selectedPhysicalId = null;
-            float widestFieldMetric = Float.MAX_VALUE;
+            float selectedFieldMetric = Float.MAX_VALUE;
+            double bestZoomMatch = Double.MAX_VALUE;
+            final float desiredZoomOut = Math.max(1.0f, requestedZoom);
+
             for (String cameraId : cameraManager.getCameraIdList()) {
-                CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(cameraId);
+                CameraCharacteristics characteristics =
+                        cameraManager.getCameraCharacteristics(cameraId);
                 Integer facing = characteristics.get(CameraCharacteristics.LENS_FACING);
                 if (facing == null || facing != CameraCharacteristics.LENS_FACING_BACK) {
                     continue;
                 }
 
-                float logicalMetric = getWideFieldMetric(characteristics);
+                float logicalMetric = getWideFieldMetric(characteristics, 0.0f);
                 Log.i(TAG, "Rear logical lens candidate id=" + cameraId
                         + " fieldMetric=" + logicalMetric);
-                if (selectedCameraId == null || logicalMetric < widestFieldMetric) {
+                if (baseCameraId == null) {
+                    baseCameraId = cameraId;
+                    baseFieldMetric = logicalMetric;
                     selectedCameraId = cameraId;
-                    selectedPhysicalId = null;
-                    widestFieldMetric = logicalMetric;
+                    selectedFieldMetric = logicalMetric;
                 }
 
-                // Many recent phones expose the ultra-wide module only as a
-                // physical member of a logical rear camera. Selecting only
-                // getCameraIdList() entries silently leaves those devices on
-                // the normal wide lens. On Android 10+, inspect each physical
-                // lens and bind the preview Surface to the widest one.
+                // Treat the first rear logical camera as the normal 1x lens.
+                // Wider logical or physical members are selected only when the
+                // user requests zoom-out; the previous code always selected
+                // the widest lens, so moving the setting had no effect.
+                if (desiredZoomOut > 1.05f && baseFieldMetric < Float.MAX_VALUE
+                        && logicalMetric < baseFieldMetric) {
+                    double score = Math.abs(Math.log(
+                            (double) baseFieldMetric / logicalMetric / desiredZoomOut));
+                    if (score < bestZoomMatch) {
+                        bestZoomMatch = score;
+                        selectedCameraId = cameraId;
+                        selectedPhysicalId = null;
+                        selectedFieldMetric = logicalMetric;
+                    }
+                }
+
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    android.util.SizeF logicalSensorSize = characteristics.get(
+                            CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE);
+                    float fallbackSensorWidth = logicalSensorSize != null
+                            ? logicalSensorSize.getWidth() : 0.0f;
                     for (String physicalId : characteristics.getPhysicalCameraIds()) {
                         try {
                             CameraCharacteristics physical =
                                     cameraManager.getCameraCharacteristics(physicalId);
-                            Integer physicalFacing = physical.get(CameraCharacteristics.LENS_FACING);
+                            Integer physicalFacing = physical.get(
+                                    CameraCharacteristics.LENS_FACING);
                             if (physicalFacing == null
                                     || physicalFacing != CameraCharacteristics.LENS_FACING_BACK) {
                                 continue;
                             }
-                            float physicalMetric = getWideFieldMetric(physical);
+                            float physicalMetric = getWideFieldMetric(
+                                    physical, fallbackSensorWidth);
                             Log.i(TAG, "Rear physical lens candidate logicalId=" + cameraId
                                     + " physicalId=" + physicalId
                                     + " fieldMetric=" + physicalMetric);
-                            if (physicalMetric < widestFieldMetric) {
-                                selectedCameraId = cameraId;
-                                selectedPhysicalId = physicalId;
-                                widestFieldMetric = physicalMetric;
+                            if (desiredZoomOut > 1.05f
+                                    && baseFieldMetric < Float.MAX_VALUE
+                                    && physicalMetric < baseFieldMetric) {
+                                double score = Math.abs(Math.log(
+                                        (double) baseFieldMetric / physicalMetric / desiredZoomOut));
+                                if (score < bestZoomMatch) {
+                                    bestZoomMatch = score;
+                                    selectedCameraId = cameraId;
+                                    selectedPhysicalId = physicalId;
+                                    selectedFieldMetric = physicalMetric;
+                                }
                             }
                         } catch (CameraAccessException | IllegalArgumentException ignored) {
-                            // Some vendors expose physical IDs without
-                            // exposing their individual characteristics.
+                            Log.w(TAG, "Unable to inspect physical camera " + physicalId, ignored);
                         }
                     }
                 }
             }
+
             cameraPhysicalId = selectedPhysicalId;
-            Log.i(TAG, "Widest rear lens selected: logicalId=" + selectedCameraId
-                    + " physicalId=" + selectedPhysicalId + " fieldMetric=" + widestFieldMetric);
+            Log.i(TAG, "Rear lens selected: requestedZoomOut=" + desiredZoomOut
+                    + " baseLogicalId=" + baseCameraId
+                    + " selectedLogicalId=" + selectedCameraId
+                    + " selectedPhysicalId=" + selectedPhysicalId
+                    + " baseFieldMetric=" + baseFieldMetric
+                    + " selectedFieldMetric=" + selectedFieldMetric
+                    + " zoomMatchError=" + bestZoomMatch);
             return selectedCameraId;
         } catch (CameraAccessException e) {
             Log.e(TAG, "Failed to get camera list", e);
