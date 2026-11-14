@@ -313,8 +313,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         spinner = SpinnerDialog.displayDialog(this, getResources().getString(R.string.conn_establishing_title),
                 getResources().getString(R.string.conn_establishing_msg), true);
 
-        // Enter landscape unless we're on a square screen
-        setPreferredOrientationForCurrentDisplay();
+        // Apply the current display rotation to Cardboard after the orientation request.
         // The activity may have been created in portrait before it requested landscape.
         // Set Cardboard's viewport to the final display rotation after that request.
         if (vrRenderer != null) {
