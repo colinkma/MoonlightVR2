@@ -16,6 +16,7 @@ import android.opengl.GLES11Ext;
 import android.os.Handler;
 import android.os.Looper;
 import android.opengl.Matrix;
+import android.preference.PreferenceManager;
 import android.os.SystemClock;
 import android.view.Surface;
 import android.content.res.Resources;
@@ -327,12 +328,10 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
         // Settings. Writes occur only when the value actually changes.
         float currentScreenDistance = nativeGetScreenDistance(nativeHandle);
         int storedDistance = Math.round(currentScreenDistance * 10.0f);
-        int previousStoredDistance = context.getSharedPreferences(
-                PreferenceConfiguration.class.getSimpleName(), Context.MODE_PRIVATE)
+        int previousStoredDistance = PreferenceManager.getDefaultSharedPreferences(context)
                 .getInt(PreferenceConfiguration.VR_SCREEN_DISTANCE_PREF_STRING, 20);
         if (storedDistance != previousStoredDistance) {
-            context.getSharedPreferences(
-                    PreferenceConfiguration.class.getSimpleName(), Context.MODE_PRIVATE)
+            PreferenceManager.getDefaultSharedPreferences(context)
                     .edit()
                     .putInt(PreferenceConfiguration.VR_SCREEN_DISTANCE_PREF_STRING, storedDistance)
                     .apply();
