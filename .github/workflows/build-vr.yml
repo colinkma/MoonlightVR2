@@ -103,6 +103,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Older queued builds must not overwrite the APK produced from a
+          # newer branch commit. Only the current branch head may publish.
+          LATEST_BRANCH_SHA="$(git ls-remote origin "refs/heads/${GITHUB_REF_NAME}" | awk '{print $1}')"
+          if [[ "$LATEST_BRANCH_SHA" != "$GITHUB_SHA" ]]; then
+            echo "Skipping release upload: branch head is $LATEST_BRANCH_SHA, build commit is $GITHUB_SHA"
+            exit 0
+          fi
           RELEASE_TAG="vrmode-${BUILD_LABEL}"
           # Remove an unpushed local tag left by an earlier failed release attempt.
           git tag -d "$RELEASE_TAG" 2>/dev/null || true
