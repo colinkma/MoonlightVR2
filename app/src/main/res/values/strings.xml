@@ -236,6 +236,8 @@
     <string name="summary_vr_controls_auto_hide">Hide the control bar after 3 seconds when you are not looking at it. Look toward the top edge of the floating screen to show it again.</string>
     <string name="title_checkbox_enable_vr_camera_passthrough">Camera passthrough when looking down</string>
     <string name="summary_checkbox_enable_vr_camera_passthrough">Use the rear camera as a transparent real-world background while looking down; stop it when you look up.</string>
+    <string name="title_checkbox_enable_vr_camera_always_on">Keep XR camera always on</string>
+    <string name="summary_checkbox_enable_vr_camera_always_on">Keep the rear camera running continuously in spatial XR mode, even when you look up. The camera stops when spatial mode ends or the stream closes.</string>
     <string name="vr_spatial_distance_near">Closer −</string>
     <string name="vr_spatial_distance_far">Farther +</string>
     <string name="vr_spatial_rotate">Rotate 90°</string>
