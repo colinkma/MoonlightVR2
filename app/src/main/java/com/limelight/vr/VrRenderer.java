@@ -141,6 +141,7 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
 
     public void setCameraSensorOrientationDegrees(int orientationDegrees) {
         cameraSensorOrientationDegrees = ((orientationDegrees % 360) + 360) % 360;
+        glSurfaceView.requestRender();
     }
 
     public void setCameraTexture(int textureId) {
@@ -228,41 +229,16 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
                 SensorManager.getOrientation(displayMatrix, orientation);
                 if (!Float.isFinite(orientation[0])) return;
 
-                // Project gravity into the display plane. Use the measured
-                // roll directly: a fixed 90-degree offset leaves the camera
-                // image sideways when the handset is returned to portrait.
-                // Use the handset's physical axes, not the app viewport
-                // axes. The VR Activity can remain landscape-locked while the
-                // phone itself is turned upright or onto its side.
-                float gravityX = -sensorMatrix[6];
-                float gravityY = -sensorMatrix[7];
-                if (Float.isFinite(gravityX) && Float.isFinite(gravityY)) {
-                    float gravityInPlaneSquared =
-                            gravityX * gravityX + gravityY * gravityY;
-                    if (gravityInPlaneSquared > 0.04f) {
-                        // The app is landscape-locked on portrait-native phones.
-                        // The raw gravity angle therefore already contains the
-                        // handset's normal 90-degree landscape mounting rotation.
-                        // Remove that neutral display rotation first; only the
-                        // additional physical roll (e.g. when lying on one side)
-                        // should rotate the streamed image and passthrough.
-                        float neutralLandscapeDegrees = 0.0f;
-                        if (viewportRotation == Surface.ROTATION_90) {
-                            neutralLandscapeDegrees = 90.0f;
-                        } else if (viewportRotation == Surface.ROTATION_270) {
-                            neutralLandscapeDegrees = -90.0f;
-                        } else if (viewportRotation == Surface.ROTATION_180) {
-                            neutralLandscapeDegrees = 180.0f;
-                        }
-
-                        float relativeRoll = (float) -Math.toDegrees(
-                                Math.atan2(gravityX, -gravityY)) - neutralLandscapeDegrees;
-                        while (relativeRoll > 180.0f) relativeRoll -= 360.0f;
-                        while (relativeRoll < -180.0f) relativeRoll += 360.0f;
-                        cameraGravityRotationDegrees = relativeRoll;
-                    } else {
-                        cameraGravityRotationDegrees = 0.0f;
-                    }
+                // Use Android's Euler roll from the rotation matrix after
+                // remapping it into the current display coordinate frame.
+                // Projecting gravity onto the handset's XY plane is incorrect:
+                // pitching the phone down changes that projection and was being
+                // mistaken for roll, leaving the camera preview sideways.
+                // orientation[2] is the remapped device roll and is independent
+                // of the pitch used to activate the look-down camera.
+                if (Float.isFinite(orientation[2])) {
+                    cameraGravityRotationDegrees =
+                            (float) -Math.toDegrees(orientation[2]);
                 }
 
                 magneticHeadingRadians = orientation[0];
@@ -317,6 +293,7 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
         if (context instanceof Activity) {
             int rotation = ((Activity) context).getWindowManager().getDefaultDisplay().getRotation();
             viewportRotation = rotation;
+            updateCameraRotationMatrix();
             nativeSetViewportOrientation(nativeHandle, rotation);
         }
         nativeOnSurfaceChanged(nativeHandle, width, height);
