@@ -71,6 +71,7 @@ public class PreferenceConfiguration {
     static final String ENABLE_VR_PREF_STRING = "checkbox_enable_vr";
     private static final String ENABLE_SKYBOX_PREF_STRING = "checkbox_enable_skybox";
     public static final String VR_SCREEN_DISTANCE_PREF_STRING = "seekbar_vr_screen_distance";
+    private static final String VR_CAMERA_ZOOM_PREF_STRING = "seekbar_vr_camera_zoom";
     private static final String VR_SCREEN_SIZE_PREF_STRING = "seekbar_vr_screen_size";
     private static final String VR_CURVATURE_MODE_PREF_STRING = "list_vr_curvature_mode";
     private static final String VR_CURVATURE_AMOUNT_PREF_STRING = "seekbar_vr_curvature_amount";
@@ -129,6 +130,7 @@ public class PreferenceConfiguration {
     private static final boolean DEFAULT_GAMEPAD_MOTION_SENSORS = true;
     private static final boolean DEFAULT_GAMEPAD_MOTION_FALLBACK = false;
     private static final int DEFAULT_VR_SCREEN_DISTANCE_INT = 20;
+    private static final int DEFAULT_VR_CAMERA_ZOOM_INT = 10;
     private static final int DEFAULT_VR_LENS_DISTORTION_STRENGTH_INT = 70;
     private static final int DEFAULT_VR_SCREEN_SIZE_INT = 50;
     private static final int DEFAULT_VR_CURVATURE_MODE_INT = 0;
@@ -192,6 +194,7 @@ public class PreferenceConfiguration {
     public boolean enableSkybox;
     public int vrLensDistortionStrengthPercent;
     public float vrScreenDistanceMeters;
+    public float vrCameraZoomRatio;
     public float vrScreenSizeMultiplier;
     public int vrCurvatureMode;
     public float vrCurvatureAmountPercent;
@@ -647,6 +650,8 @@ public class PreferenceConfiguration {
         config.enableSkybox = prefs.getBoolean(ENABLE_SKYBOX_PREF_STRING, DEFAULT_ENABLE_SKYBOX);
         int vrDistanceRaw = prefs.getInt(VR_SCREEN_DISTANCE_PREF_STRING, DEFAULT_VR_SCREEN_DISTANCE_INT);
         config.vrScreenDistanceMeters = vrDistanceRaw / 10f;
+        config.vrCameraZoomRatio = prefs.getInt(VR_CAMERA_ZOOM_PREF_STRING,
+                DEFAULT_VR_CAMERA_ZOOM_INT) / 10f;
         int vrSizeRaw = prefs.getInt(VR_SCREEN_SIZE_PREF_STRING, DEFAULT_VR_SCREEN_SIZE_INT);
         config.vrScreenSizeMultiplier = vrSizeRaw / 50f;
         config.vrCurvatureMode = getCurvatureModeValue(prefs);
