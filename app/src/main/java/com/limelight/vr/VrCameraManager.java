@@ -9,6 +9,7 @@ import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CaptureRequest;
+import android.hardware.camera2.params.OutputConfiguration;
 import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -34,6 +35,7 @@ public class VrCameraManager {
     private volatile boolean isOpening = false;
     private volatile Runnable onStartedListener;
     private volatile int cameraSensorOrientationDegrees = 90;
+    private String cameraPhysicalId;
     private Float cameraZoomRatio;
     private Rect cameraCropRegion;
     // Every start/stop operation gets a new generation. Camera2 callbacks can
@@ -83,20 +85,29 @@ public class VrCameraManager {
                 stopCamera();
                 return;
             }
-            CameraCharacteristics cameraCharacteristics = cameraManager.getCameraCharacteristics(cameraId);
+            CameraCharacteristics cameraCharacteristics = cameraManager.getCameraCharacteristics(
+                    cameraPhysicalId != null ? cameraPhysicalId : cameraId);
             Integer sensorOrientation = cameraCharacteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
             cameraSensorOrientationDegrees = sensorOrientation != null ? sensorOrientation : 90;
             cameraZoomRatio = null;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // When a physical ultra-wide lens is selected below, route the
+            // Surface directly to that sensor. Do not apply logical-camera
+            // zoom on top of the physical lens or it may crop the wider view.
+            if (cameraPhysicalId == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 Range<Float> zoomRange = cameraCharacteristics.get(CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE);
                 if (zoomRange != null) {
-                    // The preference is a 1x-to-4x zoom-out factor. Values above
-                    // 1 request a ratio below 1x (wider field of view).
+                    // Request the widest supported ratio; Camera2 clamps this
+                    // to the device's actual optical/digital zoom-out limit.
                     float requestedRatio = 1.0f / Math.max(1.0f, requestedZoom);
                     cameraZoomRatio = Math.max(zoomRange.getLower(),
                             Math.min(requestedRatio, zoomRange.getUpper()));
                 }
             }
+            Log.i(TAG, "Selected rear camera logicalId=" + cameraId
+                    + " physicalId=" + cameraPhysicalId
+                    + " requestedZoomOut=" + requestedZoom
+                    + " appliedZoomRatio=" + cameraZoomRatio
+                    + " sensorOrientation=" + cameraSensorOrientationDegrees);
             cameraCropRegion = cameraZoomRatio == null
                     ? createZoomOutCompatibleCameraSelectionCrop(cameraId, requestedZoom)
                     : null;
@@ -108,41 +119,75 @@ public class VrCameraManager {
         }
     }
 
+    private float getWideFieldMetric(CameraCharacteristics characteristics) {
+        float[] focalLengths = characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS);
+        android.util.SizeF physicalSize = characteristics.get(
+                CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE);
+        if (focalLengths == null || physicalSize == null || physicalSize.getWidth() <= 0.0f) {
+            return Float.MAX_VALUE;
+        }
+        float metric = Float.MAX_VALUE;
+        for (float focalLength : focalLengths) {
+            metric = Math.min(metric, focalLength / physicalSize.getWidth());
+        }
+        return metric;
+    }
+
     private String getRearCameraId() {
         try {
             String selectedCameraId = null;
-            float shortestFocalLength = Float.MAX_VALUE;
+            String selectedPhysicalId = null;
+            float widestFieldMetric = Float.MAX_VALUE;
             for (String cameraId : cameraManager.getCameraIdList()) {
                 CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(cameraId);
                 Integer facing = characteristics.get(CameraCharacteristics.LENS_FACING);
                 if (facing == null || facing != CameraCharacteristics.LENS_FACING_BACK) {
                     continue;
                 }
-                float[] focalLengths = characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS);
-                android.util.SizeF physicalSize = characteristics.get(
-                        CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE);
-                float widestFieldMetric = Float.MAX_VALUE;
-                if (focalLengths != null && physicalSize != null
-                        && physicalSize.getWidth() > 0.0f) {
-                    for (float focalLength : focalLengths) {
-                        // Smaller focal-length / sensor-width means a wider
-                        // horizontal field of view. Prefer the widest rear lens.
-                        widestFieldMetric = Math.min(widestFieldMetric,
-                                focalLength / physicalSize.getWidth());
+
+                float logicalMetric = getWideFieldMetric(characteristics);
+                if (selectedCameraId == null || logicalMetric < widestFieldMetric) {
+                    selectedCameraId = cameraId;
+                    selectedPhysicalId = null;
+                    widestFieldMetric = logicalMetric;
+                }
+
+                // Many recent phones expose the ultra-wide module only as a
+                // physical member of a logical rear camera. Selecting only
+                // getCameraIdList() entries silently leaves those devices on
+                // the normal wide lens. On Android 10+, inspect each physical
+                // lens and bind the preview Surface to the widest one.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    for (String physicalId : characteristics.getPhysicalCameraIds()) {
+                        try {
+                            CameraCharacteristics physical =
+                                    cameraManager.getCameraCharacteristics(physicalId);
+                            Integer physicalFacing = physical.get(CameraCharacteristics.LENS_FACING);
+                            if (physicalFacing == null
+                                    || physicalFacing != CameraCharacteristics.LENS_FACING_BACK) {
+                                continue;
+                            }
+                            float physicalMetric = getWideFieldMetric(physical);
+                            if (physicalMetric < widestFieldMetric) {
+                                selectedCameraId = cameraId;
+                                selectedPhysicalId = physicalId;
+                                widestFieldMetric = physicalMetric;
+                            }
+                        } catch (IllegalArgumentException ignored) {
+                            // Some vendors expose physical IDs without
+                            // exposing their individual characteristics.
+                        }
                     }
                 }
-                // Prefer the rear ultra-wide module when the device exposes it
-                // as a separate camera ID. This is a real wider field of view,
-                // unlike shrinking the preview quad or cropping the sensor.
-                if (selectedCameraId == null || widestFieldMetric < shortestFocalLength) {
-                    selectedCameraId = cameraId;
-                    shortestFocalLength = widestFieldMetric;
-                }
             }
+            cameraPhysicalId = selectedPhysicalId;
+            Log.i(TAG, "Widest rear lens selected: logicalId=" + selectedCameraId
+                    + " physicalId=" + selectedPhysicalId + " fieldMetric=" + widestFieldMetric);
             return selectedCameraId;
         } catch (CameraAccessException e) {
             Log.e(TAG, "Failed to get camera list", e);
         }
+        cameraPhysicalId = null;
         return null;
     }
 
@@ -218,8 +263,7 @@ public class VrCameraManager {
             List<Surface> surfaces = Collections.singletonList(targetSurface);
             Log.i(TAG, "Creating capture session: " + targetSurface
                     + " isValid=" + targetSurface.isValid());
-            device.createCaptureSession(
-                    surfaces,
+            CameraCaptureSession.StateCallback stateCallback =
                     new CameraCaptureSession.StateCallback() {
                         @Override
                         public void onConfigured(CameraCaptureSession session) {
@@ -244,12 +288,32 @@ public class VrCameraManager {
                                 }
                             }
                             Log.e(TAG, "Camera configuration failed");
-                            stopCameraForGeneration(generation);
+                            // A few camera HALs report physical ultra-wide
+                            // outputs but cannot configure this stream size.
+                            // Fall back to the logical rear camera rather
+                            // than losing passthrough entirely.
+                            if (cameraPhysicalId != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                                synchronized (VrCameraManager.this) {
+                                    if (generation != cameraGeneration || !isOpening) {
+                                        return;
+                                    }
+                                    cameraPhysicalId = null;
+                                }
+                                createCaptureSession(generation, device);
+                            } else {
+                                stopCameraForGeneration(generation);
+                            }
                         }
-                    },
-                    targetHandler
-            );
-        } catch (CameraAccessException | IllegalStateException e) {
+                    };
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && cameraPhysicalId != null) {
+                OutputConfiguration output = new OutputConfiguration(targetSurface);
+                output.setPhysicalCameraId(cameraPhysicalId);
+                device.createCaptureSessionByOutputConfigurations(
+                        Collections.singletonList(output), stateCallback, targetHandler);
+            } else {
+                device.createCaptureSession(surfaces, stateCallback, targetHandler);
+            }
+        } catch (CameraAccessException | IllegalStateException | IllegalArgumentException e) {
             Log.e(TAG, "Failed to create camera capture session", e);
             synchronized (this) {
                 if (generation != cameraGeneration) {
@@ -338,6 +402,7 @@ public class VrCameraManager {
         cameraManager = null;
         cameraCropRegion = null;
         cameraZoomRatio = null;
+        cameraPhysicalId = null;
 
         if (oldSession != null) {
             try {
