@@ -9,6 +9,8 @@ import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CaptureRequest;
+import android.hardware.camera2.CaptureResult;
+import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.OutputConfiguration;
 import android.os.Build;
 import android.os.Handler;
@@ -37,6 +39,7 @@ public class VrCameraManager {
     private volatile int cameraSensorOrientationDegrees = 90;
     private String cameraPhysicalId;
     private Float cameraZoomRatio;
+    private boolean cameraCaptureDiagnosticsLogged = false;
     private Float logicalCameraZoomRatio;
     private int logicalCameraSensorOrientationDegrees = 90;
     private Rect cameraCropRegion;
@@ -72,6 +75,7 @@ public class VrCameraManager {
 
         final int generation = ++cameraGeneration;
         isOpening = true;
+        cameraCaptureDiagnosticsLogged = false;
         this.onStartedListener = onStartedListener;
         cameraSurface = surface;
         cameraManager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
@@ -156,10 +160,17 @@ public class VrCameraManager {
         }
         Range<Float> zoomRange = characteristics.get(CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE);
         if (zoomRange == null) {
+            Log.i(TAG, "Camera has no CONTROL_ZOOM_RATIO_RANGE; requested zoom-out "
+                    + requestedZoom + " cannot be applied as a zoom ratio");
             return null;
         }
         float requestedRatio = 1.0f / Math.max(1.0f, requestedZoom);
-        return Math.max(zoomRange.getLower(), Math.min(requestedRatio, zoomRange.getUpper()));
+        float appliedRatio = Math.max(zoomRange.getLower(), Math.min(requestedRatio, zoomRange.getUpper()));
+        Log.i(TAG, "Camera zoom capability: requestedZoomOut=" + requestedZoom
+                + " requestedRatio=" + requestedRatio
+                + " supportedRange=" + zoomRange
+                + " appliedRatio=" + appliedRatio);
+        return appliedRatio;
     }
 
     private String getRearCameraId() {
@@ -382,7 +393,39 @@ public class VrCameraManager {
             } else if (cameraCropRegion != null) {
                 previewRequest.set(CaptureRequest.SCALER_CROP_REGION, cameraCropRegion);
             }
-            session.setRepeatingRequest(previewRequest.build(), null, targetHandler);
+            session.setRepeatingRequest(previewRequest.build(),
+                    new CameraCaptureSession.CaptureCallback() {
+                        @Override
+                        public void onCaptureCompleted(CameraCaptureSession captureSession,
+                                                       CaptureRequest request,
+                                                       TotalCaptureResult result) {
+                            synchronized (VrCameraManager.this) {
+                                if (cameraCaptureDiagnosticsLogged
+                                        || generation != cameraGeneration) {
+                                    return;
+                                }
+                                cameraCaptureDiagnosticsLogged = true;
+                            }
+                            Float actualZoomRatio = null;
+                            String activePhysicalId = null;
+                            Rect actualCrop = null;
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                actualZoomRatio = result.get(CaptureResult.CONTROL_ZOOM_RATIO);
+                            }
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                                activePhysicalId = result.get(
+                                        CaptureResult.LOGICAL_MULTI_CAMERA_ACTIVE_PHYSICAL_ID);
+                            }
+                            actualCrop = result.get(CaptureResult.SCALER_CROP_REGION);
+                            Log.i(TAG, "Camera capture applied: requestedPhysicalId="
+                                    + cameraPhysicalId
+                                    + " activePhysicalId=" + activePhysicalId
+                                    + " requestedZoomRatio=" + cameraZoomRatio
+                                    + " actualZoomRatio=" + actualZoomRatio
+                                    + " cropRegion=" + actualCrop
+                                    + " sensorOrientation=" + cameraSensorOrientationDegrees);
+                        }
+                    }, targetHandler);
 
             Runnable listener;
             synchronized (this) {
