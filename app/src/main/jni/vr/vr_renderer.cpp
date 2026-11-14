@@ -1046,10 +1046,21 @@ void VrMoonlightApp::RenderSpatialVideoToTexture() {
     glEnableVertexAttribArray(texcoord_attrib_);
     glVertexAttribPointer(texcoord_attrib_,2,GL_FLOAT,GL_FALSE,0,kQuadTexCoords);
     if(camera_enabled_&&camera_texture_) {
+      // The old passthrough filled the entire eye viewport, making the
+      // camera image feel like a phone display pressed against the viewer.
+      // Render it as a slightly more distant, centered view instead.
+      constexpr float kCameraViewScale = 0.82f;
+      const int camera_width = std::max(1, static_cast<int>(width * kCameraViewScale));
+      const int camera_height = std::max(1, static_cast<int>(screen_height_ * kCameraViewScale));
+      glViewport(x + (width - camera_width) / 2,
+                 (screen_height_ - camera_height) / 2,
+                 camera_width, camera_height);
       glUniformMatrix4fv(texture_transform_uniform_,1,GL_FALSE,camera_texture_transform_);
       glUniformMatrix4fv(mvp_uniform_,1,GL_FALSE,identity_gl.data());
       glBindTexture(GL_TEXTURE_EXTERNAL_OES,camera_texture_);
-      glDrawArrays(GL_TRIANGLE_STRIP,0,4); glBindTexture(GL_TEXTURE_EXTERNAL_OES,0);
+      glDrawArrays(GL_TRIANGLE_STRIP,0,4);
+      glBindTexture(GL_TEXTURE_EXTERNAL_OES,0);
+      glViewport(x,0,width,screen_height_);
     }
     float projection_gl[16]={}, eye_gl[16]={};
     CardboardLensDistortion_getProjectionMatrix(lens_distortion_,eye,0.1f,100.f,projection_gl);
