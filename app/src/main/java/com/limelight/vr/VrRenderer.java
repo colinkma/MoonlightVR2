@@ -121,8 +121,11 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     private void updateCameraRotationMatrix() {
         Matrix.setIdentityM(cameraRotationMatrix, 0);
         Matrix.translateM(cameraRotationMatrix, 0, 0.5f, 0.5f, 0f);
+        // Texture coordinates map output pixels back to the camera buffer,
+        // so the sampling transform must rotate opposite to the world-space
+        // screen correction. Using the same sign rotates the preview the wrong way.
         Matrix.rotateM(cameraRotationMatrix, 0,
-                cameraGravityRotationDegrees, 0f, 0f, 1f);
+                -cameraGravityRotationDegrees, 0f, 0f, 1f);
         Matrix.translateM(cameraRotationMatrix, 0, -0.5f, -0.5f, 0f);
     }
 
