@@ -150,7 +150,7 @@ class VrMoonlightApp {
   GLint spatial_ui_pos_attrib_ = -1;
   GLint spatial_ui_mvp_uniform_ = -1;
   GLint spatial_ui_color_uniform_ = -1;
-  static constexpr float kGazeDwellSeconds = 5.0f;
+  static constexpr float kGazeDwellSeconds = 3.0f;
   static constexpr float kWindowSelectDwellSeconds = 3.0f;
   static constexpr float kWindowIdleReleaseSeconds = 1.0f;
   static constexpr float kRecenterDwellSeconds = 2.0f;
