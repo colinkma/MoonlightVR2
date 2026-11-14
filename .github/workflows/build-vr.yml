@@ -1,8 +1,10 @@
 name: Build MoonlightVR
 
-# Builds are intentionally manual during development.
-# Run only after the complete spatial UI and gaze interaction pass review.
+# Build the feature branch on each reviewed code update; manual dispatch remains available.
 on:
+  push:
+    branches:
+      - feature/spatial-window-camera
   workflow_dispatch:
 
 jobs:
