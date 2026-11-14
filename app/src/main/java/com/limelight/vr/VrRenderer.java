@@ -222,9 +222,30 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
                 if (Float.isFinite(gravityX) && Float.isFinite(gravityY)) {
                     float gravityInPlaneSquared =
                             gravityX * gravityX + gravityY * gravityY;
-                    cameraGravityRotationDegrees = gravityInPlaneSquared > 0.04f
-                            ? (float) -Math.toDegrees(Math.atan2(gravityX, -gravityY))
-                            : 0.0f;
+                    if (gravityInPlaneSquared > 0.04f) {
+                        // The app is landscape-locked on portrait-native phones.
+                        // The raw gravity angle therefore already contains the
+                        // handset's normal 90-degree landscape mounting rotation.
+                        // Remove that neutral display rotation first; only the
+                        // additional physical roll (e.g. when lying on one side)
+                        // should rotate the streamed image and passthrough.
+                        float neutralLandscapeDegrees = 0.0f;
+                        if (viewportRotation == Surface.ROTATION_90) {
+                            neutralLandscapeDegrees = 90.0f;
+                        } else if (viewportRotation == Surface.ROTATION_270) {
+                            neutralLandscapeDegrees = -90.0f;
+                        } else if (viewportRotation == Surface.ROTATION_180) {
+                            neutralLandscapeDegrees = 180.0f;
+                        }
+
+                        float relativeRoll = (float) -Math.toDegrees(
+                                Math.atan2(gravityX, -gravityY)) - neutralLandscapeDegrees;
+                        while (relativeRoll > 180.0f) relativeRoll -= 360.0f;
+                        while (relativeRoll < -180.0f) relativeRoll += 360.0f;
+                        cameraGravityRotationDegrees = relativeRoll;
+                    } else {
+                        cameraGravityRotationDegrees = 0.0f;
+                    }
                 }
 
                 magneticHeadingRadians = orientation[0];
