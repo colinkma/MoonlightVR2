@@ -44,8 +44,10 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
         void onHeadPitchChanged(boolean lookingDown);
     }
 
-    private static final float CAMERA_ENTER_PITCH_DEGREES = 35.0f;
-    private static final float CAMERA_EXIT_PITCH_DEGREES = 25.0f;
+    // Require a deliberate downward head tilt; use hysteresis to prevent
+    // the passthrough from flickering near the activation boundary.
+    private static final float CAMERA_ENTER_PITCH_DEGREES = 52.0f;
+    private static final float CAMERA_EXIT_PITCH_DEGREES = 38.0f;
     private HeadPitchListener headPitchListener;
     private volatile boolean lookingDownForCamera = false;
 
@@ -118,7 +120,7 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
         Matrix.setIdentityM(cameraRotationMatrix, 0);
         Matrix.translateM(cameraRotationMatrix, 0, 0.5f, 0.5f, 0f);
         Matrix.rotateM(cameraRotationMatrix, 0,
-                90f + cameraGravityRotationDegrees, 0f, 0f, 1f);
+                cameraGravityRotationDegrees, 0f, 0f, 1f);
         Matrix.translateM(cameraRotationMatrix, 0, -0.5f, -0.5f, 0f);
     }
 
@@ -207,9 +209,9 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
                 SensorManager.getOrientation(displayMatrix, orientation);
                 if (!Float.isFinite(orientation[0])) return;
 
-                // Project gravity into the display plane. Its direction gives
-                // the roll needed to keep the camera passthrough horizon
-                // upright even when the headset/phone is turned onto its side.
+                // Project gravity into the display plane. Use the measured
+                // roll directly: a fixed 90-degree offset leaves the camera
+                // image sideways when the handset is returned to portrait.
                 float gravityX = -displayMatrix[6];
                 float gravityY = -displayMatrix[7];
                 if (Float.isFinite(gravityX) && Float.isFinite(gravityY)) {
