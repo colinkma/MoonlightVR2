@@ -150,7 +150,7 @@ class VrMoonlightApp {
   GLint spatial_ui_pos_attrib_ = -1;
   GLint spatial_ui_mvp_uniform_ = -1;
   GLint spatial_ui_color_uniform_ = -1;
-  static constexpr float kGazeDwellSeconds = 0.8f;
+  static constexpr float kGazeDwellSeconds = 5.0f;
   static constexpr float kWindowSelectDwellSeconds = 3.0f;
   static constexpr float kWindowIdleReleaseSeconds = 1.0f;
   static constexpr float kRecenterDwellSeconds = 2.0f;
@@ -159,6 +159,7 @@ class VrMoonlightApp {
   float gaze_dwell_seconds_ = 0.0f;
   int64_t last_gaze_frame_nano_ = 0;
   bool gaze_action_armed_ = true;
+  float gaze_pending_screen_distance_meters_ = 2.0f;
   float window_select_dwell_seconds_ = 0.0f;
   int64_t last_window_select_frame_nano_ = 0;
   bool window_select_armed_ = true;
