@@ -100,6 +100,12 @@ Java_com_limelight_vr_VrRenderer_nativeSetScreenDistance(JNIEnv*, jobject,
   FromHandle(handle)->SetScreenDistance(distanceMeters);
 }
 
+extern "C" JNIEXPORT jfloat JNICALL
+Java_com_limelight_vr_VrRenderer_nativeGetScreenDistance(JNIEnv*, jobject,
+                                                        jlong handle) {
+  return FromHandle(handle)->GetScreenDistance();
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_com_limelight_vr_VrRenderer_nativeSetScreenSize(JNIEnv*, jobject,
                                                      jlong handle,
