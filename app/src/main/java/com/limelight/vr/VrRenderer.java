@@ -125,9 +125,11 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
         // Texture coordinates map output pixels back to the camera buffer,
         // so the sampling transform must rotate opposite to the world-space
         // screen correction. Using the same sign rotates the preview the wrong way.
-        float displayRotationDegrees = viewportRotation * 90.0f;
+        // cameraGravityRotationDegrees is already relative to the neutral
+        // device/display orientation (the viewport rotation was subtracted
+        // when the gravity roll was measured). Do not subtract it a second time.
         float cameraCorrectionDegrees = cameraGravityRotationDegrees
-                + cameraSensorOrientationDegrees - displayRotationDegrees;
+                + cameraSensorOrientationDegrees;
         Matrix.rotateM(cameraRotationMatrix, 0,
                 -cameraCorrectionDegrees, 0f, 0f, 1f);
         Matrix.translateM(cameraRotationMatrix, 0, -0.5f, -0.5f, 0f);
