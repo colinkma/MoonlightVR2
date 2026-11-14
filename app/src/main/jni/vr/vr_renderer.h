@@ -160,6 +160,7 @@ class VrMoonlightApp {
   int64_t last_gaze_frame_nano_ = 0;
   bool gaze_action_armed_ = true;
   float gaze_pending_screen_distance_meters_ = 2.0f;
+  float gaze_pending_slider_local_x_ = 0.0f;
   float window_select_dwell_seconds_ = 0.0f;
   int64_t last_window_select_frame_nano_ = 0;
   bool window_select_armed_ = true;
