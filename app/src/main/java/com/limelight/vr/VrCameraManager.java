@@ -192,6 +192,23 @@ public class VrCameraManager {
                     baseFieldMetric = logicalMetric;
                     selectedCameraId = cameraId;
                     selectedFieldMetric = logicalMetric;
+
+                    // On Android 11+, prefer the logical multi-camera zoom
+                    // control whenever the HAL exposes a sub-1x range. The
+                    // camera service then performs the physical lens handoff
+                    // itself while preserving the configured preview stream.
+                    if (desiredZoomOut > 1.05f
+                            && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        Range<Float> zoomRange = characteristics.get(
+                                CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE);
+                        if (zoomRange != null && zoomRange.getLower() < 0.99f) {
+                            cameraPhysicalId = null;
+                            Log.i(TAG, "Using logical camera zoom-out: logicalId="
+                                    + cameraId + " supportedRange=" + zoomRange
+                                    + " requestedZoomOut=" + desiredZoomOut);
+                            return cameraId;
+                        }
+                    }
                 }
 
                 // Treat the first rear logical camera as the normal 1x lens.
