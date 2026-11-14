@@ -140,8 +140,11 @@ public class VrCameraManager {
             // camera, so the preview silently stayed on the normal lens.
             // Focal length is an imperfect cross-sensor proxy, but is a better
             // fallback than discarding the lens entirely.
+            // Use a conservative 10 mm sensor-width estimate to keep
+            // this fallback on roughly the same scale as focalLength /
+            // sensorWidth metrics from cameras that report physical size.
             for (float focalLength : focalLengths) {
-                metric = Math.min(metric, focalLength);
+                metric = Math.min(metric, focalLength / 10.0f);
             }
         }
         return metric;
