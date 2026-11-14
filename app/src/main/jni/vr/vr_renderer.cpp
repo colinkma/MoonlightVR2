@@ -1429,6 +1429,10 @@ void VrMoonlightApp::SetScreenSize(float sizeMultiplier) {
   geometry_dirty_ = true;
 }
 
+float VrMoonlightApp::GetScreenDistance() const {
+  return screen_distance_meters_;
+}
+
 void VrMoonlightApp::AdjustScreenDistance(float deltaMeters) {
   screen_distance_meters_ += deltaMeters;
   if (screen_distance_meters_ < kMinScreenDistanceMeters) {
