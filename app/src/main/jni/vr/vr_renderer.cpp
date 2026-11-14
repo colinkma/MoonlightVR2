@@ -466,28 +466,49 @@ void VrMoonlightApp::SetDisplayMode(int mode) {
 }
 
 void VrMoonlightApp::SetViewportOrientation(int android_rotation) {
-  // CardboardHeadTracker_getPose() expresses every pose in this viewport frame.
-  // Once tracking has produced its first pose, changing the viewport frame
-  // without transforming the saved world anchor rotates the entire scene a
-  // second time (and can make a world-locked window appear head-locked).
-  // Keep the initial landscape frame stable for the lifetime of this tracker.
-  if (head_pose_frame_count_ > 0) return;
-
+  CardboardViewportOrientation next_orientation;
   switch (android_rotation) {
     case 0:
-      viewport_orientation_ = kPortrait;
+      next_orientation = kPortrait;
       break;
     case 1:
-      viewport_orientation_ = kLandscapeLeft;
+      next_orientation = kLandscapeLeft;
       break;
     case 2:
-      viewport_orientation_ = kPortraitUpsideDown;
+      next_orientation = kPortraitUpsideDown;
       break;
     case 3:
     default:
-      viewport_orientation_ = kLandscapeRight;
+      next_orientation = kLandscapeRight;
       break;
   }
+
+  if (next_orientation == viewport_orientation_) return;
+
+  // Android can apply the requested landscape orientation after the GL thread
+  // has already produced its first Cardboard pose. Ignoring that later
+  // rotation leaves Cardboard in the old sensor/display frame; on devices
+  // whose orientation request settles later this appears as excess yaw and a
+  // head-locked (rather than world-locked) video window.
+  viewport_orientation_ = next_orientation;
+  head_pose_valid_ = false;
+  raw_head_world_valid_ = false;
+  head_pitch_reference_valid_ = false;
+  magnetic_yaw_reference_valid_ = false;
+  magnetic_yaw_correction_radians_ = 0.0f;
+  magnetic_yaw_stationary_since_nano_ = 0;
+  last_magnetic_yaw_update_nano_ = 0;
+  toolbar_anchor_valid_ = false;
+  if (display_mode_ == 1 && head_tracker_ != nullptr) {
+    window_locked_ = true;
+    window_lock_pending_ = true;
+    window_edit_mode_ = false;
+    window_dragging_ = false;
+    recenter_anchor_yaw_only_pending_ = false;
+  }
+  VR_LOGE("Viewport orientation updated: rotation=%d poseFrames=%llu",
+          android_rotation,
+          static_cast<unsigned long long>(head_pose_frame_count_));
 }
 
 void VrMoonlightApp::SetMagneticHeading(float headingRadians,
@@ -1049,7 +1070,7 @@ void VrMoonlightApp::RenderSpatialVideoToTexture() {
       // The old passthrough filled the entire eye viewport, making the
       // camera image feel like a phone display pressed against the viewer.
       // Render it as a slightly more distant, centered view instead.
-      constexpr float kCameraViewScale = 0.82f;
+      constexpr float kCameraViewScale = 0.88f;
       const int camera_width = std::max(1, static_cast<int>(width * kCameraViewScale));
       const int camera_height = std::max(1, static_cast<int>(screen_height_ * kCameraViewScale));
       glViewport(x + (width - camera_width) / 2,
