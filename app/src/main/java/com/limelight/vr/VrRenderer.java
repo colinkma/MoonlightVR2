@@ -219,21 +219,14 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
                 }
 
                 magneticHeadingRadians = orientation[0];
-                // The geomagnetic azimuth is not a safe world-yaw reference
-                // when the handset is rolled or pitched far from its normal
-                // headset posture. Let Cardboard's full 3-axis pose drive the
-                // display in that case; the native side clears stale yaw fixes.
-                final boolean stronglyTilted =
-                        Math.abs(orientation[1]) > 0.55f ||
-                        Math.abs(orientation[2]) > 0.55f;
-                magneticHeadingAccuracyRadians = stronglyTilted
-                        ? Float.MAX_VALUE
-                        : (event.values.length > 4
-                                ? event.values[4]
-                                : (event.accuracy == SensorManager.SENSOR_STATUS_ACCURACY_HIGH
-                                        ? 0.25f : Float.MAX_VALUE));
-                magneticHeadingSensorAccuracy = stronglyTilted
-                        ? SensorManager.SENSOR_STATUS_UNRELIABLE : event.accuracy;
+                // Keep the sensor's reported geomagnetic accuracy while the
+                // device is rolled. The camera image's independent gravity-
+                // projected roll correction above must not disable yaw data.
+                magneticHeadingAccuracyRadians = event.values.length > 4
+                        ? event.values[4]
+                        : (event.accuracy == SensorManager.SENSOR_STATUS_ACCURACY_HIGH
+                                ? 0.25f : Float.MAX_VALUE);
+                magneticHeadingSensorAccuracy = event.accuracy;
                 magneticHeadingTimestampNanos = event.timestamp != 0L
                         ? event.timestamp : SystemClock.elapsedRealtimeNanos();
             }
