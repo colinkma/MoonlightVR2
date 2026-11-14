@@ -1115,9 +1115,11 @@ void VrMoonlightApp::UpdateSpatialGaze() {
       // Require the gaze to remain on essentially the same point of the
       // track for the full dwell. Merely brushing the edge or glancing across
       // the slider cannot commit a new distance.
-      if (std::fabs(local_x - gaze_pending_slider_local_x_) > 0.025f) {
+      if (!gaze_pending_slider_position_valid_ ||
+          std::fabs(local_x - gaze_pending_slider_local_x_) > 0.025f) {
         gaze_pending_slider_local_x_ = local_x;
         gaze_pending_screen_distance_meters_ = requested_distance;
+        gaze_pending_slider_position_valid_ = true;
         gaze_dwell_seconds_ = 0.0f;
         gaze_action_armed_ = true;
       }
