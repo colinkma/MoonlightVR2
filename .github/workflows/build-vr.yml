@@ -4,11 +4,6 @@ name: Build MoonlightVR
 # Run only after the complete spatial UI and gaze interaction pass review.
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - feature/spatial-window-camera
-    paths-ignore:
-      - .github/workflows/build-vr.yml
 
 jobs:
   build:
