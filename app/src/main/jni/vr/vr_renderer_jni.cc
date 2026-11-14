@@ -107,12 +107,6 @@ Java_com_limelight_vr_VrRenderer_nativeGetScreenDistance(JNIEnv*, jobject,
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_limelight_vr_VrRenderer_nativeSetDeviceRoll(JNIEnv*, jobject,
-                                                    jlong handle, jfloat radians) {
-  FromHandle(handle)->SetDeviceRollRadians(radians);
-}
-
-extern "C" JNIEXPORT void JNICALL
 Java_com_limelight_vr_VrRenderer_nativeSetScreenSize(JNIEnv*, jobject,
                                                      jlong handle,
                                                      jfloat sizeMultiplier) {
