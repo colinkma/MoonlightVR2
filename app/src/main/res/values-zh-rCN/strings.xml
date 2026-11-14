@@ -288,7 +288,7 @@
     <string name="title_checkbox_enable_vr">启用 VR 模式</string>
     <string name="summary_checkbox_enable_vr">使用 Cardboard VR 眼镜进行双眼分屏显示</string>
     <string name="title_checkbox_enable_vr_spatial_mode">三维悬浮屏幕模式</string>
-    <string name="summary_checkbox_enable_vr_spatial_mode">将串流画面显示为悬浮的三维屏幕。用头显中央视线对准画面内的控制栏并停留约 0.8 秒，即可调整远近、大小或锁定屏幕。Cardboard 使用头部朝向模拟注视，不具备眼动追踪。</string>
+    <string name="summary_checkbox_enable_vr_spatial_mode">将串流画面显示为悬浮的三维屏幕。注视控制栏中的“−”或“+”图标约 3 秒，可拉近或推远屏幕；注视位置图标约 3 秒可进入或退出摆放模式。在摆放模式中，注视屏幕 3 秒可抓取，移动头部调整位置，停留 1 秒释放。Cardboard 使用头部朝向模拟注视，不具备眼动追踪。</string>
     <string name="title_checkbox_enable_vr_camera_passthrough">启用摄像头透视模式</string>
     <string name="summary_checkbox_enable_vr_camera_passthrough">在三维悬浮屏幕模式下启用后置摄像头，将真实环境画面显示为背景；默认仅低头时开启。</string>
     <string name="title_checkbox_enable_vr_camera_always_on">摄像头常开（XR 模式）</string>
