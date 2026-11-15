@@ -97,8 +97,12 @@ class VrMoonlightApp {
   // The first GetPose() after a viewport transition returns a pose computed
   // before Cardboard applies its EKF sensor-space compensation. Discard it.
   bool viewport_pose_flush_pending_ = false;
-  // Cardboard recenter resets the EKF on the next accelerometer sample.
-  // Delay anchor capture so it cannot use the pre-reset pose.
+  // Preserve an existing world anchor across viewport-frame changes. The
+  // first valid pose in the new frame supplies the coordinate-frame delta.
+  bool viewport_anchor_transform_pending_ = false;
+  Matrix4x4 viewport_previous_head_world_matrix_;
+  // Cardboard needs sensor time after startup/recenter before an anchor is
+  // captured. Do not expose a provisional, incorrectly oriented window.
   int64_t anchor_capture_not_before_nano_ = 0;
   // Spatial window is world-anchored by default. Edit mode temporarily lets
   // the user select and reposition it with head rotation.
