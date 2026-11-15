@@ -621,12 +621,12 @@ float VrMoonlightApp::OnDrawFrame() {
     ++head_pose_frame_count_;
     if ((head_pose_frame_count_ % 120) == 0) {
       __android_log_print(ANDROID_LOG_INFO, VR_LOG_TAG,
-          "Head pose #%llu q=(%.4f,%.4f,%.4f,%.4f) locked=%d pending=%d dragging=%d viewport=%d anchor=(%.3f,%.3f,%.3f) yawFix=%.2fdeg magStatus=%d magAcc=%.3f",
+          "Head pose #%llu q=(%.4f,%.4f,%.4f,%.4f) locked=%d pending=%d editMode=%d dragging=%d viewport=%d anchor=(%.3f,%.3f,%.3f) yawFix=%.2fdeg magStatus=%d magAcc=%.3f",
           static_cast<unsigned long long>(head_pose_frame_count_),
           last_head_orientation_.x, last_head_orientation_.y,
           last_head_orientation_.z, last_head_orientation_.w,
           window_locked_ ? 1 : 0, window_lock_pending_ ? 1 : 0,
-          window_dragging_ ? 1 : 0,
+          window_edit_mode_ ? 1 : 0, window_dragging_ ? 1 : 0,
           static_cast<int>(viewport_orientation_),
           window_anchor_matrix_.m[0][3], window_anchor_matrix_.m[1][3],
           window_anchor_matrix_.m[2][3],
@@ -1230,6 +1230,7 @@ void VrMoonlightApp::UpdateSpatialGaze() {
       case 0:
         window_edit_mode_=!window_edit_mode_;
         window_dragging_=false;
+        VR_LOGE("Spatial window edit mode toggled: enabled=%d", window_edit_mode_ ? 1 : 0);
         window_select_dwell_seconds_=0.f;
         window_select_armed_=true;
         if (!window_edit_mode_) {
@@ -1275,6 +1276,7 @@ void VrMoonlightApp::UpdateSpatialGaze() {
       }
       if(window_select_dwell_seconds_>=kWindowSelectDwellSeconds) {
         window_dragging_=true;
+        VR_LOGE("Spatial window drag started: editMode=%d locked=%d", window_edit_mode_ ? 1 : 0, window_locked_ ? 1 : 0);
         drag_start_head_matrix_=head_world_matrix_;
         drag_start_window_matrix_=window_anchor_matrix_;
         window_last_motion_nano_=now;
@@ -1302,6 +1304,7 @@ void VrMoonlightApp::UpdateSpatialGaze() {
       } else if(now-window_last_motion_nano_>=
                 static_cast<int64_t>(kWindowIdleReleaseSeconds*1.0e9f)) {
         window_dragging_=false;
+        VR_LOGE("Spatial window drag released after idle: anchor=(%.3f,%.3f,%.3f)", window_anchor_matrix_.m[0][3], window_anchor_matrix_.m[1][3], window_anchor_matrix_.m[2][3]);
         window_select_dwell_seconds_=0.f;
         window_select_armed_=false;
       }
