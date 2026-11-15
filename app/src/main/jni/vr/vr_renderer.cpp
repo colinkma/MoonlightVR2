@@ -491,6 +491,7 @@ void VrMoonlightApp::SetViewportOrientation(int android_rotation) {
   // whose orientation request settles later this appears as excess yaw and a
   // head-locked (rather than world-locked) video window.
   viewport_orientation_ = next_orientation;
+  viewport_pose_flush_pending_ = true;
   head_pose_valid_ = false;
   raw_head_world_valid_ = false;
   head_pitch_reference_valid_ = false;
@@ -557,6 +558,19 @@ float VrMoonlightApp::OnDrawFrame() {
   if (display_mode_ == 1 && head_tracker_ != nullptr) {
     float position[3] = {0.0f, 0.0f, 0.0f};
     float orientation[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+    if (viewport_pose_flush_pending_) {
+      // Cardboard updates its EKF viewport compensation after calculating the
+      // first pose for the new viewport. Discard that mixed-frame pose before
+      // any world anchor can be captured.
+      float discard_position[3] = {0.0f, 0.0f, 0.0f};
+      float discard_orientation[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+      CardboardHeadTracker_getPose(head_tracker_, GetBootTimeNano() + 50000000LL,
+                                   viewport_orientation_, discard_position,
+                                   discard_orientation);
+      viewport_pose_flush_pending_ = false;
+      VR_LOGE("Discarded first Cardboard pose after viewport change: viewport=%d",
+              static_cast<int>(viewport_orientation_));
+    }
     // Match the official Cardboard NDK sample's 50 ms prediction horizon.
     CardboardHeadTracker_getPose(head_tracker_, GetBootTimeNano() + 50000000LL,
                                  viewport_orientation_, position, orientation);
@@ -587,11 +601,12 @@ float VrMoonlightApp::OnDrawFrame() {
     ++head_pose_frame_count_;
     if ((head_pose_frame_count_ % 120) == 0) {
       __android_log_print(ANDROID_LOG_INFO, VR_LOG_TAG,
-          "Head pose #%llu q=(%.4f,%.4f,%.4f,%.4f) locked=%d pending=%d yawFix=%.2fdeg magStatus=%d magAcc=%.3f",
+          "Head pose #%llu q=(%.4f,%.4f,%.4f,%.4f) locked=%d pending=%d viewport=%d yawFix=%.2fdeg magStatus=%d magAcc=%.3f",
           static_cast<unsigned long long>(head_pose_frame_count_),
           last_head_orientation_.x, last_head_orientation_.y,
           last_head_orientation_.z, last_head_orientation_.w,
           window_locked_ ? 1 : 0, window_lock_pending_ ? 1 : 0,
+          static_cast<int>(viewport_orientation_),
           magnetic_yaw_correction_radians_ * 57.2957795f,
           magnetic_heading_sensor_accuracy_,
           magnetic_heading_accuracy_radians_);
@@ -638,7 +653,8 @@ float VrMoonlightApp::OnDrawFrame() {
       toolbar_anchor_matrix_ = head_world_matrix_;
       toolbar_anchor_valid_ = true;
     }
-    if (window_locked_ && window_lock_pending_) {
+    if (window_locked_ && window_lock_pending_ &&
+        GetBootTimeNano() >= anchor_capture_not_before_nano_) {
       if (recenter_anchor_yaw_only_pending_) {
         // The recenter gesture is intentionally performed while looking up.
         // Anchor only the world yaw, not that temporary pitch/roll, so the
@@ -1113,6 +1129,7 @@ void VrMoonlightApp::UpdateSpatialGaze() {
       UpdateModelMatrix();
       if (head_tracker_ != nullptr) {
         CardboardHeadTracker_recenter(head_tracker_);
+        anchor_capture_not_before_nano_ = now + 200000000LL;
       }
       head_pitch_reference_valid_ = false;
       magnetic_yaw_reference_valid_ = false;
@@ -1373,6 +1390,7 @@ void VrMoonlightApp::RecenterView() {
   recenter_action_armed_ = true;
   if (head_tracker_ != nullptr) {
     CardboardHeadTracker_recenter(head_tracker_);
+    anchor_capture_not_before_nano_ = GetBootTimeNano() + 200000000LL;
     head_pose_valid_ = false;
     toolbar_anchor_valid_ = false;
     // Recenter always places the spatial display back in front of the user's
