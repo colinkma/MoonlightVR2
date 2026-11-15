@@ -94,6 +94,12 @@ class VrMoonlightApp {
   bool screen_params_changed_;
   int display_mode_ = 0;
   CardboardViewportOrientation viewport_orientation_ = kLandscapeLeft;
+  // The first GetPose() after a viewport transition returns a pose computed
+  // before Cardboard applies its EKF sensor-space compensation. Discard it.
+  bool viewport_pose_flush_pending_ = false;
+  // Cardboard recenter resets the EKF on the next accelerometer sample.
+  // Delay anchor capture so it cannot use the pre-reset pose.
+  int64_t anchor_capture_not_before_nano_ = 0;
   // Spatial window is world-anchored by default. Edit mode temporarily lets
   // the user select and reposition it with head rotation.
   bool window_locked_ = true;
