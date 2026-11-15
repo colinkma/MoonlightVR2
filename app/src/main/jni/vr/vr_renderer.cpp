@@ -440,6 +440,9 @@ void VrMoonlightApp::SetDisplayMode(int mode) {
       // captures the anchor on the GL thread without a one-frame jump.
       window_locked_ = true;
       window_lock_pending_ = true;
+      viewport_anchor_transform_pending_ = false;
+      viewport_pose_flush_pending_ = true;
+      anchor_capture_not_before_nano_ = GetBootTimeNano() + 200000000LL;
       recenter_anchor_yaw_only_pending_ = false;
       window_edit_mode_ = false;
       window_dragging_ = false;
@@ -490,6 +493,23 @@ void VrMoonlightApp::SetViewportOrientation(int android_rotation) {
   // rotation leaves Cardboard in the old sensor/display frame; on devices
   // whose orientation request settles later this appears as excess yaw and a
   // head-locked (rather than world-locked) video window.
+  // If a world anchor already exists, do not throw it away when Android
+  // reports a viewport change. Cardboard changes its pose coordinate frame;
+  // transform the saved anchor by the same frame delta on the first valid
+  // post-transition pose instead of recapturing it at the user's current gaze.
+  const bool preserve_existing_anchor =
+      display_mode_ == 1 && head_tracker_ != nullptr &&
+      window_locked_ && !window_lock_pending_ && head_pose_valid_;
+  if (preserve_existing_anchor) {
+    viewport_previous_head_world_matrix_ = head_world_matrix_;
+    viewport_anchor_transform_pending_ = true;
+  } else if (display_mode_ == 1 && head_tracker_ != nullptr) {
+    window_locked_ = true;
+    window_lock_pending_ = true;
+    viewport_anchor_transform_pending_ = false;
+    anchor_capture_not_before_nano_ = GetBootTimeNano() + 200000000LL;
+  }
+
   viewport_orientation_ = next_orientation;
   viewport_pose_flush_pending_ = true;
   head_pose_valid_ = false;
@@ -501,15 +521,15 @@ void VrMoonlightApp::SetViewportOrientation(int android_rotation) {
   last_magnetic_yaw_update_nano_ = 0;
   toolbar_anchor_valid_ = false;
   if (display_mode_ == 1 && head_tracker_ != nullptr) {
-    window_locked_ = true;
-    window_lock_pending_ = true;
     window_edit_mode_ = false;
     window_dragging_ = false;
     recenter_anchor_yaw_only_pending_ = false;
   }
-  VR_LOGE("Viewport orientation updated: rotation=%d poseFrames=%llu",
+  VR_LOGE("Viewport orientation updated: rotation=%d poseFrames=%llu preserveAnchor=%d pendingCapture=%d",
           android_rotation,
-          static_cast<unsigned long long>(head_pose_frame_count_));
+          static_cast<unsigned long long>(head_pose_frame_count_),
+          preserve_existing_anchor ? 1 : 0,
+          window_lock_pending_ ? 1 : 0);
 }
 
 void VrMoonlightApp::SetMagneticHeading(float headingRadians,
@@ -601,12 +621,15 @@ float VrMoonlightApp::OnDrawFrame() {
     ++head_pose_frame_count_;
     if ((head_pose_frame_count_ % 120) == 0) {
       __android_log_print(ANDROID_LOG_INFO, VR_LOG_TAG,
-          "Head pose #%llu q=(%.4f,%.4f,%.4f,%.4f) locked=%d pending=%d viewport=%d yawFix=%.2fdeg magStatus=%d magAcc=%.3f",
+          "Head pose #%llu q=(%.4f,%.4f,%.4f,%.4f) locked=%d pending=%d dragging=%d viewport=%d anchor=(%.3f,%.3f,%.3f) yawFix=%.2fdeg magStatus=%d magAcc=%.3f",
           static_cast<unsigned long long>(head_pose_frame_count_),
           last_head_orientation_.x, last_head_orientation_.y,
           last_head_orientation_.z, last_head_orientation_.w,
           window_locked_ ? 1 : 0, window_lock_pending_ ? 1 : 0,
+          window_dragging_ ? 1 : 0,
           static_cast<int>(viewport_orientation_),
+          window_anchor_matrix_.m[0][3], window_anchor_matrix_.m[1][3],
+          window_anchor_matrix_.m[2][3],
           magnetic_yaw_correction_radians_ * 57.2957795f,
           magnetic_heading_sensor_accuracy_,
           magnetic_heading_accuracy_radians_);
@@ -627,6 +650,22 @@ float VrMoonlightApp::OnDrawFrame() {
     raw_head_world_matrix.m[0][3] = 0.0f;
     raw_head_world_matrix.m[1][3] = 0.0f;
     raw_head_world_matrix.m[2][3] = 0.0f;
+
+    if (viewport_anchor_transform_pending_) {
+      Matrix4x4 inverse_previous_head;
+      if (InvertMatrix(viewport_previous_head_world_matrix_, inverse_previous_head)) {
+        const Matrix4x4 viewport_frame_delta =
+            raw_head_world_matrix * inverse_previous_head;
+        window_anchor_matrix_ = viewport_frame_delta * window_anchor_matrix_;
+        VR_LOGE("Preserved world anchor across viewport transition: frameDelta=(%.4f,%.4f,%.4f)",
+                viewport_frame_delta.m[0][3],
+                viewport_frame_delta.m[1][3],
+                viewport_frame_delta.m[2][3]);
+      } else {
+        VR_LOGE("Unable to transform world anchor across viewport transition");
+      }
+      viewport_anchor_transform_pending_ = false;
+    }
 
     // Use Cardboard's pose as the single source of truth for the spatial
     // window transform. A second, independently sampled magnetic yaw signal
@@ -1001,6 +1040,15 @@ void VrMoonlightApp::RenderVideoToTexture() {
 void VrMoonlightApp::RenderSpatialVideoToTexture() {
   if (!framebuffer_ || !render_texture_ || !video_texture_ ||
       !lens_distortion_ || !head_pose_valid_) return;
+  if (window_locked_ && window_lock_pending_) {
+    // Keep the first mixed-frame/startup pose off-screen. The video appears
+    // only after a stable pose has been used to capture the world anchor.
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer_);
+    glClearColor(0.f, 0.f, 0.f, 1.f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    return;
+  }
   glBindFramebuffer(GL_FRAMEBUFFER,framebuffer_);
   glDisable(GL_DEPTH_TEST);
   glClearColor(0.f,0.f,0.f,1.f);
