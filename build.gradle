@@ -1,8 +1,10 @@
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 buildscript {
     repositories {
-        mavenCentral()
+        // Use Google's hosted Maven Central mirror to avoid direct Central rate limits.
+        maven { url 'https://maven-central.storage-download.googleapis.com/maven2/' }
         google()
+        mavenCentral()
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:8.13.2'
@@ -12,8 +14,10 @@ buildscript {
 
 allprojects {
     repositories {
-        mavenCentral()
+        // Use Google's hosted Maven Central mirror to avoid direct Central rate limits.
+        maven { url 'https://maven-central.storage-download.googleapis.com/maven2/' }
         google()
+        mavenCentral()
         maven { url 'https://jitpack.io' }
     }
 }
