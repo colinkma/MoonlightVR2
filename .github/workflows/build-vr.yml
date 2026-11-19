@@ -153,3 +153,29 @@ jobs:
           echo "| Build | ${BUILD_LABEL:-unknown} |" >> $GITHUB_STEP_SUMMARY
           echo "| Commit | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
           echo "| APK | ${{ env.APK_NAME }} |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Prune old build history
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          # Keep the current run plus the nine newest previous runs on this branch.
+          mapfile -t OLD_RUN_IDS < <(
+            gh run list --workflow "$GITHUB_WORKFLOW" --branch "$GITHUB_REF_NAME" --limit 100 --json databaseId \
+              --jq "[.[] | select(.databaseId != ${GITHUB_RUN_ID})][9:][] | .databaseId"
+          )
+          for run_id in "${OLD_RUN_IDS[@]}"; do
+            echo "Deleting old workflow run: $run_id"
+            gh run delete "$run_id" || echo "::warning::Could not delete workflow run $run_id"
+          done
+
+          # Keep the three newest versioned APK releases for rollback.
+          mapfile -t OLD_RELEASE_TAGS < <(
+            gh release list --limit 100 --json tagName \
+              --jq '[.[] | select(.tagName | startswith("vrmode-"))][3:][] | .tagName'
+          )
+          for tag in "${OLD_RELEASE_TAGS[@]}"; do
+            echo "Deleting obsolete APK release: $tag"
+            gh release delete "$tag" --yes || echo "::warning::Could not delete release $tag"
+          done
