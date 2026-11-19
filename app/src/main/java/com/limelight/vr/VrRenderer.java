@@ -18,6 +18,8 @@ import android.os.Looper;
 import android.opengl.Matrix;
 import android.preference.PreferenceManager;
 import android.os.SystemClock;
+import android.os.Build;
+import android.util.DisplayMetrics;
 import android.view.Surface;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
@@ -352,10 +354,83 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
         glSurfaceView.requestRender();
     }
 
+    // ---- Diagnostic only: logs raw sensor availability/rate for ~5 s after resume.
+    // It never touches head tracking. Look for lines starting with "VrProbe:".
+    private void runSensorProbe() {
+        if (sensorManager == null) {
+            return;
+        }
+        try {
+            final Context ctx = glSurfaceView.getContext();
+            DisplayMetrics dm = new DisplayMetrics();
+            Activity act = (ctx instanceof Activity) ? (Activity) ctx : null;
+            int rot = -1;
+            if (act != null) {
+                act.getWindowManager().getDefaultDisplay().getRealMetrics(dm);
+                rot = act.getWindowManager().getDefaultDisplay().getRotation();
+            }
+            LimeLog.info("VrProbe: model=" + Build.MANUFACTURER + " " + Build.MODEL + " sdk=" + Build.VERSION.SDK_INT
+                    + " rotation=" + rot + " px=" + dm.widthPixels + "x" + dm.heightPixels
+                    + " xdpi=" + dm.xdpi + " ydpi=" + dm.ydpi + " density=" + dm.densityDpi);
+            final int[] types = { Sensor.TYPE_GYROSCOPE_UNCALIBRATED, Sensor.TYPE_GYROSCOPE, Sensor.TYPE_ACCELEROMETER };
+            final String[] names = { "gyroUncal", "gyro", "accel" };
+            final SensorEventListener[] listeners = new SensorEventListener[types.length];
+            for (int i = 0; i < types.length; i++) {
+                final Sensor sensor = sensorManager.getDefaultSensor(types[i]);
+                final String label = names[i];
+                if (sensor == null) {
+                    LimeLog.info("VrProbe: " + label + " MISSING");
+                    continue;
+                }
+                LimeLog.info("VrProbe: " + label + " name=" + sensor.getName() + " vendor=" + sensor.getVendor()
+                        + " minDelayUs=" + sensor.getMinDelay() + " fifoMax=" + sensor.getFifoMaxEventCount()
+                        + " wakeUp=" + (Build.VERSION.SDK_INT >= 21 && sensor.isWakeUpSensor()));
+                final long[] count = {0};
+                final long[] lastTs = {0};
+                final double[] maxGapMs = {0};
+                final double[] magSum = {0};
+                final double[] magMax = {0};
+                listeners[i] = new SensorEventListener() {
+                    @Override
+                    public void onSensorChanged(SensorEvent e) {
+                        count[0]++;
+                        if (lastTs[0] != 0) {
+                            double gap = (e.timestamp - lastTs[0]) / 1e6;
+                            if (gap > maxGapMs[0]) maxGapMs[0] = gap;
+                        }
+                        lastTs[0] = e.timestamp;
+                        double m = Math.sqrt(e.values[0] * e.values[0] + e.values[1] * e.values[1] + e.values[2] * e.values[2]);
+                        magSum[0] += m;
+                        if (m > magMax[0]) magMax[0] = m;
+                        if (count[0] == 1) {
+                            LimeLog.info("VrProbe: " + label + " first event ts=" + e.timestamp
+                                    + " elapsedRealtimeNs=" + SystemClock.elapsedRealtimeNanos());
+                        }
+                    }
+                    @Override
+                    public void onAccuracyChanged(Sensor s, int accuracy) {}
+                };
+                boolean ok = sensorManager.registerListener(listeners[i], sensor, SensorManager.SENSOR_DELAY_FASTEST);
+                LimeLog.info("VrProbe: " + label + " registered=" + ok);
+                final SensorEventListener l = listeners[i];
+                new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                    sensorManager.unregisterListener(l);
+                    double hz = count[0] / 5.0;
+                    LimeLog.info("VrProbe: " + label + " events=" + count[0] + " rateHz=" + hz
+                            + " maxGapMs=" + maxGapMs[0] + " meanMag=" + (count[0] > 0 ? magSum[0] / count[0] : 0)
+                            + " maxMag=" + magMax[0]);
+                }, 5000);
+            }
+        } catch (Throwable t) {
+            LimeLog.warning("VrProbe failed: " + t);
+        }
+    }
+
     public void onResume() {
         LimeLog.info("VrRenderer.onResume");
         rendererResumed = true;
         updateMagneticHeadingRegistration();
+        runSensorProbe();
         glSurfaceView.onResume();
         // Keep Cardboard tracker state changes on the same GL thread that reads
         // its pose every frame. Calling pause/resume from the Activity thread
